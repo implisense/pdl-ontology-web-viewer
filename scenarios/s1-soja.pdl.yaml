@@ -1,0 +1,386 @@
+pdl_version: "1.0"
+
+scenario:
+  id: soy_feed_disruption
+  name: "Soja-Futtermittel-Lieferkette"
+  sector: agriculture
+  criticality: high
+  description: "Simulation der Auswirkungen einer Soja-Lieferkettenunterbrechung auf die europäische Futtermittel- und Fleischproduktion"
+
+entities:
+  # Produktion
+  - id: brazil_farms
+    type: region
+    name: "Sojaanbau Brasilien"
+    sector: agriculture
+    location: Brazil
+    vulnerability: 0.6
+
+  - id: argentina_farms
+    type: region
+    name: "Sojaanbau Argentinien"
+    sector: agriculture
+    location: Argentina
+    vulnerability: 0.5
+
+  - id: us_farms
+    type: region
+    name: "Sojaanbau USA"
+    sector: agriculture
+    location: United States
+    vulnerability: 0.3
+
+  # Logistik-Infrastruktur
+  - id: santos_port
+    type: infrastructure
+    name: "Hafen Santos"
+    sector: logistics
+    location: Brazil
+    vulnerability: 0.7
+
+  - id: paranagua_port
+    type: infrastructure
+    name: "Hafen Paranaguá"
+    sector: logistics
+    location: Brazil
+    vulnerability: 0.65
+
+  - id: rotterdam_port
+    type: infrastructure
+    name: "Hafen Rotterdam"
+    sector: logistics
+    location: Netherlands
+    vulnerability: 0.3
+
+  - id: hamburg_port
+    type: infrastructure
+    name: "Hafen Hamburg"
+    sector: logistics
+    location: Germany
+    vulnerability: 0.3
+
+  # Verarbeitung
+  - id: eu_oil_mills
+    type: manufacturer
+    name: "EU Ölmühlen"
+    sector: processing
+    location: EU
+    vulnerability: 0.5
+
+  - id: feed_mills
+    type: manufacturer
+    name: "Futtermittelhersteller"
+    sector: processing
+    location: EU
+    vulnerability: 0.6
+
+  # Endverbraucher
+  - id: poultry_farms
+    type: manufacturer
+    name: "Geflügelbetriebe"
+    sector: agriculture
+    location: EU
+    vulnerability: 0.8
+
+  - id: pig_farms
+    type: manufacturer
+    name: "Schweinebetriebe"
+    sector: agriculture
+    location: EU
+    vulnerability: 0.75
+
+  - id: dairy_farms
+    type: manufacturer
+    name: "Milchwirtschaft"
+    sector: agriculture
+    location: EU
+    vulnerability: 0.6
+
+  # Abhängigkeiten
+  - id: gas_supply
+    type: commodity
+    name: "Erdgasversorgung"
+    sector: energy
+    vulnerability: 0.7
+
+  - id: fertilizer_supply
+    type: commodity
+    name: "Düngemittelversorgung"
+    sector: chemistry
+    vulnerability: 0.6
+
+supply_chains:
+  - id: soy_to_eu_main
+    name: "Soja-Hauptlieferkette Brasilien-EU"
+    stages:
+      - [brazil_farms, santos_port]
+      - [santos_port, rotterdam_port]
+      - [rotterdam_port, eu_oil_mills]
+      - [eu_oil_mills, feed_mills]
+      - [feed_mills, poultry_farms]
+      - [feed_mills, pig_farms]
+      - [feed_mills, dairy_farms]
+    dependencies:
+      - from: eu_oil_mills
+        to: gas_supply
+        type: energy
+        criticality: high
+      - from: brazil_farms
+        to: fertilizer_supply
+        type: input
+        criticality: medium
+
+  - id: soy_to_eu_secondary
+    name: "Soja-Nebenlieferkette Paranaguá"
+    stages:
+      - [brazil_farms, paranagua_port]
+      - [paranagua_port, hamburg_port]
+      - [hamburg_port, eu_oil_mills]
+
+  - id: soy_argentina_route
+    name: "Argentinien-Alternativroute"
+    stages:
+      - [argentina_farms, rotterdam_port]
+      - [rotterdam_port, eu_oil_mills]
+
+events:
+  - id: brazil_drought
+    name: "Dürre Brasilien"
+    type: natural_disaster
+    trigger:
+      target: brazil_farms
+      probability: 0.15
+    impact:
+      supply: "-40%"
+      duration: 90d
+    causes: [soy_export_reduction, fertilizer_demand_spike]
+    reference: "Dürre 2022 - Ertragsrückgang 30-45%"
+
+  - id: soy_export_reduction
+    name: "Soja-Exportrückgang"
+    type: market_shock
+    trigger:
+      target: santos_port
+      condition: "brazil_drought.active"
+    impact:
+      supply: "-35%"
+      duration: 120d
+    causes: [feed_price_spike]
+    reference: "Export-Statistiken CONAB 2022"
+
+  - id: port_congestion
+    name: "Hafenstau Santos"
+    type: infrastructure_failure
+    trigger:
+      target: santos_port
+      probability: 0.25
+    impact:
+      supply: "-20%"
+      duration: 30d
+    reference: "Regelmäßige Engpässe während Erntesaison"
+
+  - id: feed_price_spike
+    name: "Futtermittelpreisanstieg"
+    type: market_shock
+    trigger:
+      target: feed_mills
+      condition: "soy_export_reduction.active"
+    impact:
+      price: "+60%"
+      duration: 180d
+    causes: [livestock_pressure]
+    reference: "Preisentwicklung 2022/2023"
+
+  - id: livestock_pressure
+    name: "Druck auf Tierproduktion"
+    type: market_shock
+    trigger:
+      target: poultry_farms
+      condition: "feed_price_spike.active"
+    impact:
+      supply: "-15%"
+      price: "+25%"
+      duration: 240d
+    reference: "Schlachtstatistiken BLE 2022"
+
+  - id: gas_price_spike
+    name: "Gaspreis-Explosion"
+    type: market_shock
+    trigger:
+      target: gas_supply
+      probability: 0.2
+    impact:
+      price: "+200%"
+      duration: 180d
+    causes: [ammonia_halt, oil_mill_slowdown]
+    reference: "Gaskrise 2022"
+
+  - id: ammonia_halt
+    name: "Ammoniak-Produktionsstopp"
+    type: infrastructure_failure
+    trigger:
+      target: fertilizer_supply
+      condition: "gas_price_spike.active"
+    impact:
+      supply: "-70%"
+      duration: 90d
+    reference: "BASF/Yara Produktionsstopps 2022"
+
+  - id: oil_mill_slowdown
+    name: "Ölmühlen-Drosselung"
+    type: infrastructure_failure
+    trigger:
+      target: eu_oil_mills
+      condition: "gas_price_spike.active"
+    impact:
+      supply: "-30%"
+      duration: 60d
+    reference: "ADM/Cargill Meldungen 2022"
+
+  - id: fertilizer_demand_spike
+    name: "Düngemittel-Nachfragespitze"
+    type: market_shock
+    trigger:
+      target: fertilizer_supply
+      condition: "brazil_drought.active"
+    impact:
+      demand: "+40%"
+      price: "+80%"
+      duration: 120d
+
+cascades:
+  - id: soy_crisis_cascade
+    name: "Soja-Krisenkaskade"
+    origin: brazil_drought
+    timeline:
+      - at: 0d
+        event: brazil_drought
+        impact:
+          sector: agriculture
+          severity: critical
+
+      - at: 14d
+        event: soy_export_reduction
+        impact:
+          sector: logistics
+          severity: high
+
+      - at: 21d
+        event: port_congestion
+        impact:
+          sector: logistics
+          severity: medium
+
+      - at: 28d
+        event: feed_price_spike
+        impact:
+          sector: agriculture
+          severity: critical
+
+      - at: 42d
+        event: livestock_pressure
+        affects: [poultry_farms, pig_farms]
+        impact:
+          sector: agriculture
+          severity: high
+
+      - at: 60d
+        event: consumer_price_increase
+        affects: [dairy_farms]
+        impact:
+          sector: retail
+          severity: medium
+
+    probability: 0.9
+    validation:
+      reference: "Soja-Krise 2022"
+      source: "BMEL Marktberichte, FAO GIEWS"
+      confidence: 0.85
+
+  - id: energy_food_cascade
+    name: "Energie-Lebensmittel-Kaskade"
+    origin: gas_price_spike
+    timeline:
+      - at: 0d
+        event: gas_price_spike
+        impact:
+          sector: energy
+          severity: critical
+
+      - at: 7d
+        event: ammonia_halt
+        impact:
+          sector: chemistry
+          severity: critical
+
+      - at: 14d
+        event: oil_mill_slowdown
+        impact:
+          sector: processing
+          severity: high
+
+      - at: 21d
+        event: feed_price_spike
+        affects: [feed_mills]
+        impact:
+          sector: agriculture
+          severity: high
+
+      - at: 35d
+        event: livestock_pressure
+        affects: [poultry_farms, pig_farms, dairy_farms]
+        impact:
+          sector: agriculture
+          severity: critical
+
+    probability: 0.85
+    validation:
+      reference: "Gaskrise 2022"
+      source: "Destatis, BLE Versorgungsbilanzen"
+      confidence: 0.9
+
+  - id: compound_crisis
+    name: "Kombinierte Krise"
+    origin: brazil_drought
+    timeline:
+      - at: 0d
+        event: brazil_drought
+        impact:
+          sector: agriculture
+          severity: critical
+
+      - at: 14d
+        event: gas_price_spike
+        impact:
+          sector: energy
+          severity: critical
+
+      - at: 28d
+        event: soy_export_reduction
+        impact:
+          sector: logistics
+          severity: high
+
+      - at: 35d
+        event: ammonia_halt
+        impact:
+          sector: chemistry
+          severity: critical
+
+      - at: 42d
+        event: feed_price_spike
+        impact:
+          sector: agriculture
+          severity: critical
+
+      - at: 56d
+        event: livestock_pressure
+        affects: [poultry_farms, pig_farms, dairy_farms]
+        impact:
+          sector: agriculture
+          severity: critical
+
+    probability: 0.3
+    validation:
+      reference: "Hypothetische Kombination basierend auf 2022-Ereignissen"
+      confidence: 0.6

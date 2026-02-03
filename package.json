@@ -1,0 +1,34 @@
+{
+  "name": "provider-pdl",
+  "version": "1.0.0",
+  "description": "PROVIDER Domain Language (PDL) - A YAML-based DSL for supply chain disruption scenarios",
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "validate": "node tools/pdl-validator.js",
+    "to-rdf": "node tools/pdl-to-rdf.js",
+    "to-json": "node tools/pdl-to-json.js",
+    "test": "node --test test/*.test.js"
+  },
+  "keywords": [
+    "pdl",
+    "supply-chain",
+    "simulation",
+    "knowledge-graph",
+    "rdf",
+    "dsl"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "ajv": "^8.12.0",
+    "ajv-formats": "^2.1.1",
+    "yaml": "^2.3.4"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
