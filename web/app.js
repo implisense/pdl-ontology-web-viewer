@@ -644,8 +644,8 @@ function applyLabelDensity(nodes) {
   });
 }
 
-function getMostConnectedNodeId(nodes, edges) {
-  if (!nodes.length) return null;
+function getTopConnectedNodeIds(nodes, edges, limit = 3) {
+  if (!nodes.length || limit <= 0) return [];
 
   const degree = new Map(nodes.map((node) => [node.id, 0]));
   edges.forEach((edge) => {
@@ -682,7 +682,7 @@ function getMostConnectedNodeId(nodes, edges) {
     return a.id.localeCompare(b.id);
   });
 
-  return candidates[0]?.id || null;
+  return candidates.slice(0, limit).map((entry) => entry.id);
 }
 function applyFilters() {
   if (!state.graph) return;
@@ -779,14 +779,17 @@ function applyFilters() {
     );
   }
 
-  const crownNodeId = getMostConnectedNodeId(finalNodes, finalEdges);
-  if (crownNodeId) {
+  const medalIcons = ["🥇", "🥈", "🥉"];
+  const topNodeIds = getTopConnectedNodeIds(finalNodes, finalEdges, medalIcons.length);
+  if (topNodeIds.length) {
+    const medalByNodeId = new Map(topNodeIds.map((id, index) => [id, medalIcons[index]]));
     finalNodes = finalNodes.map((node) => {
-      if (node.id !== crownNodeId) return node;
+      const medal = medalByNodeId.get(node.id);
+      if (!medal) return node;
       const baseLabel = node._baseLabel || node.label || node.id;
       return {
         ...node,
-        _baseLabel: "👑 " + baseLabel
+        _baseLabel: medal + " " + baseLabel
       };
     });
   }
