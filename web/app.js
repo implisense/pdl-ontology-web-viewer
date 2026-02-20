@@ -152,6 +152,43 @@ const elements = {
   tutorialStep: document.getElementById("tutorialStep")
 };
 
+const LOCATION_FLAG_BY_KEY = {
+  germany: "DE",
+  brazil: "BR",
+  argentina: "AR",
+  "united states": "US",
+  netherlands: "NL",
+  taiwan: "TW",
+  "south korea": "KR",
+  china: "CN",
+  india: "IN",
+  egypt: "EG",
+  panama: "PA",
+  singapore: "SG",
+  "south africa": "ZA",
+  myanmar: "MM",
+  australia: "AU",
+  malaysia: "MY",
+  "united kingdom": "GB"
+};
+
+function countryCodeToFlag(code) {
+  if (!code || code.length !== 2) return "";
+  const upper = code.toUpperCase();
+  return String.fromCodePoint(...Array.from(upper).map((char) => 127397 + char.charCodeAt(0)));
+}
+
+function getLocationBadge(location) {
+  if (!location || typeof location !== "string") return "";
+  const key = location.trim().toLowerCase();
+  if (key === "eu" || key === "europe") return "🇪🇺";
+  if (key === "global" || key === "eurasia") return "🌍";
+  if (key === "atlantic" || key === "indian ocean" || key === "baltic sea") return "🌊";
+  const code = LOCATION_FLAG_BY_KEY[key];
+  if (!code) return "📍";
+  return countryCodeToFlag(code) || "📍";
+}
+
 function addVisualStyles(graph) {
   const entityIds = new Set(
     graph.nodes.filter((node) => node.type === "entity").map((node) => node.id)
@@ -188,8 +225,11 @@ function addVisualStyles(graph) {
     const palette = colors[node.type] || colors.entity;
     const isScenario = node.type === "scenario";
     const isTimeline = node.type === "timeline_entry";
+    const nodeLabel = node.label || node.id;
+    const locationBadge = getLocationBadge(node.data?.location);
     const styled = {
       ...node,
+      label: locationBadge ? locationBadge + " " + nodeLabel : nodeLabel,
       shape: isScenario ? "box" : "dot",
       size: isScenario
         ? 26
