@@ -159,12 +159,12 @@ function addVisualStyles(graph) {
     const styled = {
       ...node,
       shape: isScenario ? "box" : "dot",
-      size: isScenario ? 26 : isTimeline ? 10 : 14,
+      size: isScenario ? 26 : isTimeline ? 10 : node.type === "entity" ? 19.6 : node.type === "event" ? 9.8 : 14,
       color: palette,
       font: {
         color: "#0b1220",
         face: "Space Grotesk",
-        size: 13
+        size: 15
       },
       borderWidth: isScenario ? 2 : 1,
       title: buildTooltip(node)
@@ -189,7 +189,7 @@ function addVisualStyles(graph) {
       font: {
         color: "#0b1220",
         face: "Space Grotesk",
-        size: 11
+        size: 13
       }
     };
     styled._style = {
@@ -307,7 +307,6 @@ function setFocusEvent(eventNode) {
     eventIds,
     label: eventNode.label || eventId
   };
-  updateFocusUI();
 }
 
 function clearFocus() {
@@ -316,6 +315,7 @@ function clearFocus() {
 }
 
 function updateFocusUI() {
+  if (!elements.focusLabel || !elements.focusReset) return;
   if (!state.focus) {
     elements.focusLabel.textContent = "Pfad-Fokus: aus";
     elements.focusReset.disabled = true;
@@ -494,37 +494,16 @@ function applyFilters() {
     }
     return true;
   });
-
-  const focus = state.focus;
-  const focusFilteredNodes =
-    focus && state.focusMode === "filter"
-      ? filteredNodes.filter((node) => isNodeInFocus(node, focus))
-      : filteredNodes;
-
-  const nodeIds = new Set(focusFilteredNodes.map((node) => node.id));
+  const nodeIds = new Set(filteredNodes.map((node) => node.id));
   const filteredEdges = state.graph.edges.filter((edge) => {
     if (!edgeTypes.has(edge.type)) return false;
     return nodeIds.has(edge.from) && nodeIds.has(edge.to);
   });
-
-  state.analysis.filteredNodes = focusFilteredNodes;
+  state.analysis.filteredNodes = filteredNodes;
   state.analysis.filteredEdges = filteredEdges;
 
-  const focusNodeIds =
-    focus && state.focusMode === "highlight"
-      ? new Set(focusFilteredNodes.filter((node) => isNodeInFocus(node, focus)).map((node) => node.id))
-      : null;
-
-  const nodesToRender = focusNodeIds
-    ? focusFilteredNodes.map((node) => (focusNodeIds.has(node.id) ? highlightNode(node) : dimNode(node)))
-    : focusFilteredNodes.map((node) => ({ ...node }));
-
-  const edgesToRender = focusNodeIds
-    ? filteredEdges.map((edge) => {
-        const isFocused = focusNodeIds.has(edge.from) && focusNodeIds.has(edge.to);
-        return isFocused ? highlightEdge(edge) : dimEdge(edge);
-      })
-    : filteredEdges.map((edge) => ({ ...edge }));
+  const nodesToRender = filteredNodes.map((node) => ({ ...node }));
+  const edgesToRender = filteredEdges.map((edge) => ({ ...edge }));
 
   const supplyHighlight = getSupplyHighlight();
   const applySupplyDim = supplyHighlight && state.supplyDim;
@@ -1097,7 +1076,6 @@ function updateUrlState() {
   if (!state.graph || state.uiState.applying) return;
   const payload = {
     conflictMode: state.conflictMode,
-    focusMode: state.focusMode,
     search: elements.searchInput?.value || "",
     filters: {
       nodeTypes: Array.from(gatherFilters(elements.nodeTypeFilters)),
@@ -1140,10 +1118,6 @@ function applyPendingUiState() {
   if (typeof pending.conflictMode === "boolean") {
     elements.conflictMode.checked = pending.conflictMode;
     setConflictMode(pending.conflictMode);
-  }
-  if (pending.focusMode) {
-    state.focusMode = pending.focusMode;
-    elements.focusHighlight.checked = pending.focusMode === "highlight";
   }
   if (typeof pending.search === "string") {
     elements.searchInput.value = pending.search;
@@ -1421,9 +1395,6 @@ function focusNodeFromYaml(nodeId) {
   state.selectedNodeType = node.type;
   updateSupplyUI();
   renderDetailsSelection(node);
-  if (node.type === "event") {
-    setFocusEvent(node);
-  }
   applyFilters();
 
   const visible = state.nodesData.get(node.id);
@@ -1752,7 +1723,6 @@ function buildNetwork(graph) {
   state.analysis.path = null;
   state.analysis.pathHighlight = false;
   state.analysis.pathMessage = null;
-  updateFocusUI();
   updatePathControls();
   setAnalysisResult("Noch keine Analyse.");
   setExportStatus("");
@@ -1861,9 +1831,6 @@ function buildNetwork(graph) {
         state.selectedNodeType = node.type;
         updateSupplyUI();
         renderDetailsSelection(node);
-        if (node.type === "event") {
-          setFocusEvent(node);
-        }
         applyFilters();
         return;
       }
@@ -1995,7 +1962,6 @@ async function loadExample() {
 
 function wireUI() {
   state.uiState.pending = readUrlState();
-  elements.focusHighlight.checked = state.focusMode === "highlight";
   elements.supplyDim.checked = state.supplyDim;
   updateFileLabel();
   setActiveTab("graph");
@@ -2019,14 +1985,6 @@ function wireUI() {
   elements.searchInput.addEventListener("input", applyFilters);
   elements.conflictMode.addEventListener("change", (event) => {
     setConflictMode(event.target.checked);
-    applyFilters();
-  });
-  elements.focusHighlight.addEventListener("change", (event) => {
-    state.focusMode = event.target.checked ? "highlight" : "filter";
-    applyFilters();
-  });
-  elements.focusReset.addEventListener("click", () => {
-    clearFocus();
     applyFilters();
   });
   elements.fitBtn.addEventListener("click", () => {
