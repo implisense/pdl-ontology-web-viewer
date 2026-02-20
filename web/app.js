@@ -2499,7 +2499,7 @@ const TUTORIAL_STEPS = [
 
 const tutorialState = { step: 0, open: false };
 const TUTORIAL_SEEN_KEY = "pdl-tutorial-seen";
-const SPLASH_AUTO_HIDE_MS = 2400;
+const SPLASH_AUTO_HIDE_MS = 4200;
 const SPLASH_FADE_MS = 280;
 
 function openTutorial() {
@@ -2562,7 +2562,7 @@ function initSplashScreen() {
 
   document.body.classList.add("splash-open");
 
-  const finishSplash = ({ loadExampleScenario = false } = {}) => {
+  const finishSplash = ({ loadExampleScenario = true } = {}) => {
     if (closed) return;
     closed = true;
 
