@@ -160,6 +160,57 @@ header .subtitle {
   margin: 0;
 }
 
+.collapsible-card {
+  padding: 0;
+  overflow: hidden;
+}
+
+.card-toggle {
+  display: grid;
+  gap: 0;
+}
+
+.card-toggle > summary {
+  list-style: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 16px;
+  cursor: pointer;
+}
+
+.card-toggle > summary::-webkit-details-marker {
+  display: none;
+}
+
+.card-toggle-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.card-toggle-content {
+  padding: 0 16px 16px;
+  display: grid;
+  gap: 12px;
+}
+
+.card-toggle-icon {
+  width: 10px;
+  height: 10px;
+  border-right: 2px solid var(--muted);
+  border-bottom: 2px solid var(--muted);
+  transform: rotate(-45deg);
+  transition: transform 0.2s ease;
+  flex-shrink: 0;
+}
+
+.card-toggle[open] .card-toggle-icon {
+  transform: rotate(45deg);
+}
+
+
 .file-input {
   display: inline-flex;
   align-items: center;

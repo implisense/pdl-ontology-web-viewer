@@ -101,8 +101,10 @@
         <p id="status" class="status">Noch keine Datei geladen.</p>
       </section>
 
-      <section class="card">
-        <h2>Filter</h2>
+      <section class="card collapsible-card">
+        <details class="card-toggle" id="filterCardToggle">
+          <summary><span class="card-toggle-title">Filter</span><span class="card-toggle-icon" aria-hidden="true"></span></summary>
+          <div class="card-toggle-content">
         <label class="mode-toggle">
           <input id="conflictMode" type="checkbox" />
           Nur Konfliktkette (Events + Cascades)
@@ -184,10 +186,14 @@
           </div>
           <div id="eventSubtypeFilters" class="filter-list"></div>
         </div>
+          </div>
+        </details>
       </section>
 
-      <section class="card">
-        <h2>Graph</h2>
+      <section class="card collapsible-card">
+        <details class="card-toggle" id="graphCardToggle">
+          <summary><span class="card-toggle-title">Graph</span><span class="card-toggle-icon" aria-hidden="true"></span></summary>
+          <div class="card-toggle-content">
         <div class="stats" id="stats"></div>
         <div class="graph-actions">
           <button id="fitBtn">Ansicht zentrieren</button>
@@ -197,6 +203,8 @@
           <button id="exportPng" class="ghost" type="button">Export PNG</button>
         </div>
         <p id="exportStatus" class="status"></p>
+          </div>
+        </details>
       </section>
 
     </aside>
