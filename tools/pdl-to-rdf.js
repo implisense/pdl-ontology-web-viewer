@@ -4,11 +4,14 @@
  * PDL to RDF/Turtle Converter
  * Converts PDL YAML files to RDF/Turtle format for Knowledge Graph integration
  *
- * Usage: node pdl-to-rdf.js <pdl-file.yaml> [--output <file.ttl>]
+ * This converter generates RDF that conforms to the PDL Ontology, which extends
+ * and aligns with the CoyPu ontology (https://schema.coypu.org/global/2.3).
+ *
+ * Usage: node pdl-to-rdf.js <pdl-file.yaml> [--output <file.ttl>] [--include-ontology]
  */
 
 import { readFileSync, writeFileSync, existsSync } from 'fs';
-import { resolve, basename, dirname } from 'path';
+import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { parse as parseYaml } from 'yaml';
 
@@ -19,6 +22,7 @@ const __dirname = dirname(__filename);
 const NAMESPACES = {
   pdl: 'https://provider-project.org/ontology/pdl#',
   pdlr: 'https://provider-project.org/resource/',
+  coy: 'https://schema.coypu.org/global#',
   rdf: 'http://www.w3.org/1999/02/22-rdf-syntax-ns#',
   rdfs: 'http://www.w3.org/2000/01/rdf-schema#',
   xsd: 'http://www.w3.org/2001/XMLSchema#',
@@ -26,6 +30,34 @@ const NAMESPACES = {
   skos: 'http://www.w3.org/2004/02/skos/core#',
   dcterms: 'http://purl.org/dc/terms/',
   geo: 'http://www.w3.org/2003/01/geo/wgs84_pos#'
+};
+
+// PDL entity type to CoyPu class mapping
+const ENTITY_TYPE_TO_COYPU = {
+  manufacturer: 'coy:Company',
+  commodity: 'coy:Commodity',
+  infrastructure: 'coy:Infrastructure',
+  service: null, // No direct CoyPu equivalent
+  region: 'coy:Region'
+};
+
+// PDL event type to CoyPu class mapping
+const EVENT_TYPE_TO_COYPU = {
+  natural_disaster: 'coy:Disaster',
+  market_shock: null,
+  infrastructure_failure: null,
+  regulatory: null,
+  geopolitical: 'coy:SocioPoliticalEvent',
+  pandemic: null,
+  cyber_attack: null
+};
+
+// Dependency type to PDL class mapping
+const DEPENDENCY_TYPE_TO_CLASS = {
+  energy: 'pdl:DependencyType_energy',
+  input: 'pdl:DependencyType_input',
+  logistics: 'pdl:DependencyType_logistics',
+  data: 'pdl:DependencyType_data'
 };
 
 /**
@@ -61,25 +93,83 @@ function toIriLocalName(id) {
 }
 
 /**
+ * Convert PDL entity type to class name (e.g., "manufacturer" -> "Manufacturer")
+ */
+function toEntityClassName(type) {
+  return type.charAt(0).toUpperCase() + type.slice(1);
+}
+
+/**
+ * Convert PDL event type to class name (e.g., "natural_disaster" -> "NaturalDisaster")
+ */
+function toEventClassName(type) {
+  return type.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join('');
+}
+
+/**
+ * Build type declaration with CoyPu mapping if available
+ */
+function buildEntityTypes(entityType) {
+  const pdlClass = `pdl:${toEntityClassName(entityType)}`;
+  const coypuClass = ENTITY_TYPE_TO_COYPU[entityType];
+
+  if (coypuClass) {
+    return `${pdlClass}, ${coypuClass}`;
+  }
+  return pdlClass;
+}
+
+/**
+ * Build event type declaration with CoyPu mapping if available
+ */
+function buildEventTypes(eventType) {
+  const pdlClass = `pdl:Event_${toEventClassName(eventType)}`;
+  const coypuClass = EVENT_TYPE_TO_COYPU[eventType];
+
+  if (coypuClass) {
+    return `pdl:Event, ${pdlClass}, ${coypuClass}`;
+  }
+  return `pdl:Event, ${pdlClass}`;
+}
+
+/**
  * Convert PDL to RDF/Turtle
  */
-function convertToTurtle(pdl) {
+function convertToTurtle(pdl, options = {}) {
+  const { includeOntology = false } = options;
   const lines = [];
 
-  // Prefixes
+  // Header
+  lines.push('# =============================================================================');
   lines.push('# PDL to RDF/Turtle Export');
+  lines.push('# =============================================================================');
   lines.push(`# Generated: ${new Date().toISOString()}`);
+  lines.push('# Ontology: https://provider-project.org/ontology/pdl');
+  lines.push('# Extends: https://schema.coypu.org/global/2.3 (CoyPu Ontology)');
+  lines.push('# =============================================================================');
   lines.push('');
 
+  // Prefixes
   for (const [prefix, uri] of Object.entries(NAMESPACES)) {
     lines.push(`@prefix ${prefix}: <${uri}> .`);
   }
   lines.push('');
 
+  // Ontology import declaration
+  lines.push('# Ontology Import');
+  lines.push('<https://provider-project.org/resource/export> a owl:Ontology ;');
+  lines.push('    owl:imports <https://provider-project.org/ontology/pdl> ;');
+  lines.push('    owl:imports <https://schema.coypu.org/global/2.3> ;');
+  lines.push(`    dcterms:created "${new Date().toISOString().split('T')[0]}"^^xsd:date .`);
+  lines.push('');
+
   // Scenario
   if (pdl.scenario) {
     const scenarioUri = `pdlr:scenario_${toIriLocalName(pdl.scenario.id)}`;
+    lines.push('# =============================================================================');
     lines.push(`# Scenario: ${pdl.scenario.name}`);
+    lines.push('# =============================================================================');
+    lines.push('');
     lines.push(`${scenarioUri} a pdl:Scenario ;`);
     lines.push(`    dcterms:identifier "${escapeTurtleString(pdl.scenario.id)}" ;`);
     lines.push(`    rdfs:label "${escapeTurtleString(pdl.scenario.name)}" ;`);
@@ -94,16 +184,19 @@ function convertToTurtle(pdl) {
 
   // Entities
   if (pdl.entities && pdl.entities.length > 0) {
-    lines.push('# ========== Entities ==========');
+    lines.push('# =============================================================================');
+    lines.push('# Entities');
+    lines.push('# =============================================================================');
     lines.push('');
 
     for (const entity of pdl.entities) {
       const entityUri = `pdlr:entity_${toIriLocalName(entity.id)}`;
-      const typeClass = `pdl:${entity.type.charAt(0).toUpperCase() + entity.type.slice(1)}`;
+      const typeDecl = buildEntityTypes(entity.type);
 
-      lines.push(`${entityUri} a ${typeClass} ;`);
+      lines.push(`${entityUri} a ${typeDecl} ;`);
       lines.push(`    dcterms:identifier "${escapeTurtleString(entity.id)}" ;`);
       lines.push(`    rdfs:label "${escapeTurtleString(entity.name)}" ;`);
+      lines.push(`    pdl:entityType "${escapeTurtleString(entity.type)}" ;`);
       lines.push(`    pdl:sector "${escapeTurtleString(entity.sector)}" ;`);
 
       if (entity.location) {
@@ -128,7 +221,9 @@ function convertToTurtle(pdl) {
 
   // Supply Chains
   if (pdl.supply_chains && pdl.supply_chains.length > 0) {
-    lines.push('# ========== Supply Chains ==========');
+    lines.push('# =============================================================================');
+    lines.push('# Supply Chains');
+    lines.push('# =============================================================================');
     lines.push('');
 
     for (const chain of pdl.supply_chains) {
@@ -155,12 +250,20 @@ function convertToTurtle(pdl) {
         chain.stages.forEach((stage, idx) => {
           const [from, to] = stage;
           const connectionUri = `pdlr:connection_${toIriLocalName(chain.id)}_${idx + 1}`;
+          const fromUri = `pdlr:entity_${toIriLocalName(from)}`;
+          const toUri = `pdlr:entity_${toIriLocalName(to)}`;
 
           lines.push(`${connectionUri} a pdl:SupplyChainConnection ;`);
           lines.push(`    pdl:sequence ${idx + 1} ;`);
-          lines.push(`    pdl:fromEntity pdlr:entity_${toIriLocalName(from)} ;`);
-          lines.push(`    pdl:toEntity pdlr:entity_${toIriLocalName(to)} ;`);
+          lines.push(`    pdl:fromEntity ${fromUri} ;`);
+          lines.push(`    pdl:toEntity ${toUri} ;`);
           lines.push(`    pdl:belongsToChain ${chainUri} .`);
+          lines.push('');
+
+          // Also emit CoyPu-compatible direct supplier/customer relationships
+          lines.push(`# CoyPu-compatible supplier relationship`);
+          lines.push(`${toUri} coy:hasSupplier ${fromUri} .`);
+          lines.push(`${fromUri} coy:hasCustomer ${toUri} .`);
           lines.push('');
         });
       }
@@ -169,17 +272,29 @@ function convertToTurtle(pdl) {
       if (chain.dependencies) {
         chain.dependencies.forEach((dep, idx) => {
           const depUri = `pdlr:dependency_${toIriLocalName(chain.id)}_${idx + 1}`;
+          const fromUri = `pdlr:entity_${toIriLocalName(dep.from)}`;
+          const toUri = `pdlr:entity_${toIriLocalName(dep.to)}`;
+          const depTypeClass = DEPENDENCY_TYPE_TO_CLASS[dep.type];
 
           lines.push(`${depUri} a pdl:Dependency ;`);
-          lines.push(`    pdl:fromEntity pdlr:entity_${toIriLocalName(dep.from)} ;`);
-          lines.push(`    pdl:toEntity pdlr:entity_${toIriLocalName(dep.to)} ;`);
+          lines.push(`    pdl:fromEntity ${fromUri} ;`);
+          lines.push(`    pdl:toEntity ${toUri} ;`);
           lines.push(`    pdl:dependencyType "${escapeTurtleString(dep.type)}" ;`);
+
+          if (depTypeClass) {
+            lines.push(`    pdl:dependencyTypeRef ${depTypeClass} ;`);
+          }
 
           if (dep.criticality) {
             lines.push(`    pdl:criticality pdl:Criticality_${dep.criticality} ;`);
           }
 
           lines.push(`    pdl:belongsToChain ${chainUri} .`);
+          lines.push('');
+
+          // Emit direct dependsOn relationship
+          lines.push(`# Direct dependency relationship`);
+          lines.push(`${fromUri} pdl:dependsOn ${toUri} .`);
           lines.push('');
         });
       }
@@ -188,21 +303,26 @@ function convertToTurtle(pdl) {
 
   // Events
   if (pdl.events && pdl.events.length > 0) {
-    lines.push('# ========== Events ==========');
+    lines.push('# =============================================================================');
+    lines.push('# Events');
+    lines.push('# =============================================================================');
     lines.push('');
 
     for (const event of pdl.events) {
       const eventUri = `pdlr:event_${toIriLocalName(event.id)}`;
-      const typeClass = `pdl:Event_${event.type.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join('')}`;
+      const typeDecl = buildEventTypes(event.type);
 
-      lines.push(`${eventUri} a pdl:Event, ${typeClass} ;`);
+      lines.push(`${eventUri} a ${typeDecl} ;`);
       lines.push(`    dcterms:identifier "${escapeTurtleString(event.id)}" ;`);
       lines.push(`    rdfs:label "${escapeTurtleString(event.name)}" ;`);
       lines.push(`    pdl:eventType "${escapeTurtleString(event.type)}" ;`);
 
       // Trigger
       if (event.trigger) {
-        lines.push(`    pdl:triggerTarget pdlr:entity_${toIriLocalName(event.trigger.target)} ;`);
+        const targetUri = `pdlr:entity_${toIriLocalName(event.trigger.target)}`;
+        lines.push(`    pdl:triggerTarget ${targetUri} ;`);
+        // Also emit CoyPu-compatible impact relationship
+        lines.push(`    coy:hasImpactOn ${targetUri} ;`);
 
         if (event.trigger.probability !== undefined) {
           lines.push(`    pdl:triggerProbability "${event.trigger.probability}"^^xsd:decimal ;`);
@@ -249,11 +369,24 @@ function convertToTurtle(pdl) {
       lines.push(lastLine.replace(/ ;$/, ' .'));
       lines.push('');
     }
+
+    // Emit inverse isImpactedBy relationships for entities
+    lines.push('# CoyPu-compatible inverse impact relationships');
+    for (const event of pdl.events) {
+      if (event.trigger) {
+        const eventUri = `pdlr:event_${toIriLocalName(event.id)}`;
+        const targetUri = `pdlr:entity_${toIriLocalName(event.trigger.target)}`;
+        lines.push(`${targetUri} coy:isImpactedBy ${eventUri} .`);
+      }
+    }
+    lines.push('');
   }
 
   // Cascades
   if (pdl.cascades && pdl.cascades.length > 0) {
-    lines.push('# ========== Cascades ==========');
+    lines.push('# =============================================================================');
+    lines.push('# Cascades');
+    lines.push('# =============================================================================');
     lines.push('');
 
     for (const cascade of pdl.cascades) {
@@ -299,7 +432,7 @@ function convertToTurtle(pdl) {
           lines.push(`${entryUri} a pdl:TimelineEntry ;`);
           lines.push(`    pdl:sequence ${idx + 1} ;`);
           lines.push(`    pdl:atTime "${escapeTurtleString(entry.at)}" ;`);
-          lines.push(`    pdl:timelineEvent "${escapeTurtleString(entry.event)}" ;`);
+          lines.push(`    pdl:timelineEvent pdlr:event_${toIriLocalName(entry.event)} ;`);
           lines.push(`    pdl:belongsToCascade ${cascadeUri} ;`);
 
           // Impact
@@ -326,38 +459,151 @@ function convertToTurtle(pdl) {
     }
   }
 
-  // Ontology classes (for completeness)
-  lines.push('# ========== Ontology Definitions ==========');
+  // Include inline ontology definitions if requested (for standalone use)
+  if (includeOntology) {
+    lines.push('# =============================================================================');
+    lines.push('# Inline Ontology Definitions (for standalone use)');
+    lines.push('# =============================================================================');
+    lines.push('# Note: For full ontology, import https://provider-project.org/ontology/pdl');
+    lines.push('');
+
+    // Classes
+    lines.push('# Core Classes');
+    lines.push('pdl:Scenario a owl:Class ;');
+    lines.push('    rdfs:label "Scenario"@en ;');
+    lines.push('    rdfs:comment "Container for supply chain disruption scenarios."@en .');
+    lines.push('');
+
+    lines.push('pdl:Entity a owl:Class ;');
+    lines.push('    rdfs:label "Entity"@en ;');
+    lines.push('    rdfs:comment "Base class for supply chain actors, resources, and infrastructure."@en .');
+    lines.push('');
+
+    lines.push('pdl:Manufacturer a owl:Class ;');
+    lines.push('    rdfs:subClassOf pdl:Entity, coy:Company ;');
+    lines.push('    rdfs:label "Manufacturer"@en .');
+    lines.push('');
+
+    lines.push('pdl:Commodity a owl:Class ;');
+    lines.push('    rdfs:subClassOf pdl:Entity, coy:Commodity ;');
+    lines.push('    rdfs:label "Commodity"@en .');
+    lines.push('');
+
+    lines.push('pdl:Infrastructure a owl:Class ;');
+    lines.push('    rdfs:subClassOf pdl:Entity, coy:Infrastructure ;');
+    lines.push('    rdfs:label "Infrastructure"@en .');
+    lines.push('');
+
+    lines.push('pdl:Service a owl:Class ;');
+    lines.push('    rdfs:subClassOf pdl:Entity ;');
+    lines.push('    rdfs:label "Service"@en .');
+    lines.push('');
+
+    lines.push('pdl:Region a owl:Class ;');
+    lines.push('    rdfs:subClassOf pdl:Entity, coy:Region ;');
+    lines.push('    rdfs:label "Region"@en .');
+    lines.push('');
+
+    lines.push('pdl:SupplyChain a owl:Class ;');
+    lines.push('    rdfs:label "Supply Chain"@en .');
+    lines.push('');
+
+    lines.push('pdl:SupplyChainConnection a owl:Class ;');
+    lines.push('    rdfs:label "Supply Chain Connection"@en .');
+    lines.push('');
+
+    lines.push('pdl:Dependency a owl:Class ;');
+    lines.push('    rdfs:label "Dependency"@en .');
+    lines.push('');
+
+    lines.push('pdl:Event a owl:Class ;');
+    lines.push('    rdfs:subClassOf coy:Event ;');
+    lines.push('    rdfs:label "Event"@en .');
+    lines.push('');
+
+    lines.push('pdl:Event_NaturalDisaster a owl:Class ;');
+    lines.push('    rdfs:subClassOf pdl:Event, coy:Disaster ;');
+    lines.push('    rdfs:label "Natural Disaster Event"@en .');
+    lines.push('');
+
+    lines.push('pdl:Event_MarketShock a owl:Class ;');
+    lines.push('    rdfs:subClassOf pdl:Event ;');
+    lines.push('    rdfs:label "Market Shock Event"@en .');
+    lines.push('');
+
+    lines.push('pdl:Event_InfrastructureFailure a owl:Class ;');
+    lines.push('    rdfs:subClassOf pdl:Event ;');
+    lines.push('    rdfs:label "Infrastructure Failure Event"@en .');
+    lines.push('');
+
+    lines.push('pdl:Event_Regulatory a owl:Class ;');
+    lines.push('    rdfs:subClassOf pdl:Event ;');
+    lines.push('    rdfs:label "Regulatory Event"@en .');
+    lines.push('');
+
+    lines.push('pdl:Event_Geopolitical a owl:Class ;');
+    lines.push('    rdfs:subClassOf pdl:Event, coy:SocioPoliticalEvent ;');
+    lines.push('    rdfs:label "Geopolitical Event"@en .');
+    lines.push('');
+
+    lines.push('pdl:Event_Pandemic a owl:Class ;');
+    lines.push('    rdfs:subClassOf pdl:Event ;');
+    lines.push('    rdfs:label "Pandemic Event"@en .');
+    lines.push('');
+
+    lines.push('pdl:Event_CyberAttack a owl:Class ;');
+    lines.push('    rdfs:subClassOf pdl:Event ;');
+    lines.push('    rdfs:label "Cyber Attack Event"@en .');
+    lines.push('');
+
+    lines.push('pdl:Cascade a owl:Class ;');
+    lines.push('    rdfs:label "Cascade"@en .');
+    lines.push('');
+
+    lines.push('pdl:TimelineEntry a owl:Class ;');
+    lines.push('    rdfs:label "Timeline Entry"@en .');
+    lines.push('');
+
+    // Enumerations
+    lines.push('# Enumerations');
+    lines.push('pdl:Criticality a owl:Class ;');
+    lines.push('    rdfs:label "Criticality Level"@en .');
+    lines.push('pdl:Criticality_high a pdl:Criticality ;');
+    lines.push('    rdfs:label "High Criticality"@en .');
+    lines.push('pdl:Criticality_medium a pdl:Criticality ;');
+    lines.push('    rdfs:label "Medium Criticality"@en .');
+    lines.push('pdl:Criticality_low a pdl:Criticality ;');
+    lines.push('    rdfs:label "Low Criticality"@en .');
+    lines.push('');
+
+    lines.push('pdl:Severity a owl:Class ;');
+    lines.push('    rdfs:label "Severity Level"@en .');
+    lines.push('pdl:Severity_critical a pdl:Severity ;');
+    lines.push('    rdfs:label "Critical Severity"@en .');
+    lines.push('pdl:Severity_high a pdl:Severity ;');
+    lines.push('    rdfs:label "High Severity"@en .');
+    lines.push('pdl:Severity_medium a pdl:Severity ;');
+    lines.push('    rdfs:label "Medium Severity"@en .');
+    lines.push('pdl:Severity_low a pdl:Severity ;');
+    lines.push('    rdfs:label "Low Severity"@en .');
+    lines.push('');
+
+    lines.push('pdl:DependencyType a owl:Class ;');
+    lines.push('    rdfs:label "Dependency Type"@en .');
+    lines.push('pdl:DependencyType_energy a pdl:DependencyType ;');
+    lines.push('    rdfs:label "Energy Dependency"@en .');
+    lines.push('pdl:DependencyType_input a pdl:DependencyType ;');
+    lines.push('    rdfs:label "Input Dependency"@en .');
+    lines.push('pdl:DependencyType_logistics a pdl:DependencyType ;');
+    lines.push('    rdfs:label "Logistics Dependency"@en .');
+    lines.push('pdl:DependencyType_data a pdl:DependencyType ;');
+    lines.push('    rdfs:label "Data Dependency"@en .');
+  }
+
   lines.push('');
-  lines.push('pdl:Scenario a owl:Class ;');
-  lines.push('    rdfs:label "Scenario" .');
-  lines.push('');
-  lines.push('pdl:Entity a owl:Class ;');
-  lines.push('    rdfs:label "Entity" .');
-  lines.push('');
-  lines.push('pdl:Manufacturer rdfs:subClassOf pdl:Entity .');
-  lines.push('pdl:Commodity rdfs:subClassOf pdl:Entity .');
-  lines.push('pdl:Infrastructure rdfs:subClassOf pdl:Entity .');
-  lines.push('pdl:Service rdfs:subClassOf pdl:Entity .');
-  lines.push('pdl:Region rdfs:subClassOf pdl:Entity .');
-  lines.push('');
-  lines.push('pdl:SupplyChain a owl:Class ;');
-  lines.push('    rdfs:label "Supply Chain" .');
-  lines.push('');
-  lines.push('pdl:Event a owl:Class ;');
-  lines.push('    rdfs:label "Event" .');
-  lines.push('');
-  lines.push('pdl:Cascade a owl:Class ;');
-  lines.push('    rdfs:label "Cascade" .');
-  lines.push('');
-  lines.push('pdl:Criticality_high a pdl:Criticality .');
-  lines.push('pdl:Criticality_medium a pdl:Criticality .');
-  lines.push('pdl:Criticality_low a pdl:Criticality .');
-  lines.push('');
-  lines.push('pdl:Severity_critical a pdl:Severity .');
-  lines.push('pdl:Severity_high a pdl:Severity .');
-  lines.push('pdl:Severity_medium a pdl:Severity .');
-  lines.push('pdl:Severity_low a pdl:Severity .');
+  lines.push('# =============================================================================');
+  lines.push('# End of Export');
+  lines.push('# =============================================================================');
 
   return lines.join('\n');
 }
@@ -372,21 +618,32 @@ async function main() {
     console.log(`
 PDL to RDF/Turtle Converter
 
+Converts PDL YAML files to RDF/Turtle format that conforms to the PDL Ontology
+and aligns with the CoyPu ontology (https://schema.coypu.org/global/2.3).
+
 Usage: node pdl-to-rdf.js <pdl-file.yaml> [options]
 
 Options:
-  --output, -o <file>    Output file (default: stdout)
-  --help, -h             Show this help message
+  --output, -o <file>      Output file (default: stdout)
+  --include-ontology       Include inline ontology definitions for standalone use
+  --help, -h               Show this help message
 
 Examples:
   node pdl-to-rdf.js scenarios/s1-soja.pdl.yaml
   node pdl-to-rdf.js scenarios/s1-soja.pdl.yaml -o output.ttl
+  node pdl-to-rdf.js scenarios/s1-soja.pdl.yaml --include-ontology -o standalone.ttl
+
+Output includes:
+  - PDL-native classes and properties (pdl: namespace)
+  - CoyPu-compatible type assertions (coy: namespace)
+  - CoyPu-compatible relationships (coy:hasSupplier, coy:hasImpactOn, etc.)
 `);
     process.exit(0);
   }
 
   const inputFile = resolve(args[0]);
   let outputFile = null;
+  let includeOntology = args.includes('--include-ontology');
 
   const outputIdx = args.findIndex(a => a === '--output' || a === '-o');
   if (outputIdx !== -1 && args[outputIdx + 1]) {
@@ -395,7 +652,7 @@ Examples:
 
   try {
     const pdl = loadYamlFile(inputFile);
-    const turtle = convertToTurtle(pdl);
+    const turtle = convertToTurtle(pdl, { includeOntology });
 
     if (outputFile) {
       writeFileSync(outputFile, turtle, 'utf-8');
@@ -411,7 +668,7 @@ Examples:
 }
 
 // Export for module use
-export { convertToTurtle, loadYamlFile };
+export { convertToTurtle, loadYamlFile, NAMESPACES, ENTITY_TYPE_TO_COYPU, EVENT_TYPE_TO_COYPU };
 
 // Run if called directly
 main();
