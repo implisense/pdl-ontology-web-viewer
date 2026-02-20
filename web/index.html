@@ -19,6 +19,7 @@
     <div class="tabs">
       <button id="tabGraph" class="tab active" type="button">Graph</button>
       <button id="tabYaml" class="tab" type="button">YAML Viewer</button>
+      <button id="tabAbout" class="tab" type="button">About</button>
     </div>
     <div class="topbar-right">
       <div id="fileLabel" class="file-label">Keine Datei geladen</div>
@@ -264,6 +265,38 @@
         </div>
       </main>
     </div>
+  </div>
+
+  <div id="aboutView" class="view">
+    <main class="about-layout">
+      <section class="card about-hero">
+        <p class="eyebrow">PDL-Viewer</p>
+        <h1>About</h1>
+        <p class="subtitle">
+          PDL-Viewer ist ein webbasiertes Tool zur interaktiven Analyse von PDL-YAML Szenarien als Netzwerkgraph.
+        </p>
+      </section>
+      <section class="about-grid">
+        <article class="card about-card">
+          <h2>Zweck</h2>
+          <p class="status">
+            Sichtbarmachen von Abhaengigkeiten, Events und Cascade-Effekten in Lieferketten fuer Forschung und Diskussion.
+          </p>
+        </article>
+        <article class="card about-card">
+          <h2>Funktionen</h2>
+          <ul class="about-list">
+            <li>Graph-Ansicht mit Filtern, Fokus und Pfadanalyse</li>
+            <li>YAML-Strukturansicht mit Suche und Navigation</li>
+            <li>Export als JSON und PNG</li>
+          </ul>
+        </article>
+        <article class="card about-card">
+          <h2>Lizenz</h2>
+          <p class="status">Open Source unter der MIT License.</p>
+        </article>
+      </section>
+    </main>
   </div>
 
 <div id="tutorialOverlay" class="tutorial-overlay hidden">

@@ -88,8 +88,10 @@ const elements = {
   fileLabel: document.getElementById("fileLabel"),
   tabGraph: document.getElementById("tabGraph"),
   tabYaml: document.getElementById("tabYaml"),
+  tabAbout: document.getElementById("tabAbout"),
   graphView: document.getElementById("graphView"),
   yamlView: document.getElementById("yamlView"),
+  aboutView: document.getElementById("aboutView"),
   yamlTree: document.getElementById("yamlTree"),
   yamlStatus: document.getElementById("yamlStatus"),
   yamlSearch: document.getElementById("yamlSearch"),
@@ -1232,11 +1234,17 @@ function exportPng() {
 }
 
 function setActiveTab(tab) {
+  const isGraph = tab === "graph";
   const isYaml = tab === "yaml";
-  elements.graphView.classList.toggle("active", !isYaml);
+  const isAbout = tab === "about";
+
+  elements.graphView.classList.toggle("active", isGraph);
   elements.yamlView.classList.toggle("active", isYaml);
-  elements.tabGraph.classList.toggle("active", !isYaml);
+  elements.aboutView.classList.toggle("active", isAbout);
+
+  elements.tabGraph.classList.toggle("active", isGraph);
   elements.tabYaml.classList.toggle("active", isYaml);
+  elements.tabAbout.classList.toggle("active", isAbout);
 }
 
 function updateFileLabel() {
@@ -2061,6 +2069,7 @@ function wireUI() {
 
   elements.tabGraph.addEventListener("click", () => setActiveTab("graph"));
   elements.tabYaml.addEventListener("click", () => setActiveTab("yaml"));
+  elements.tabAbout.addEventListener("click", () => setActiveTab("about"));
   elements.yamlExpand.addEventListener("click", () => setAllYamlDetails(true));
   elements.yamlCollapse.addEventListener("click", () => setAllYamlDetails(false));
   if (elements.yamlSearch) {

@@ -688,6 +688,39 @@ button.tiny {
   color: var(--muted);
 }
 
+.about-layout {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 32px 24px 48px;
+  display: grid;
+  gap: 20px;
+}
+
+.about-hero h1 {
+  margin: 0;
+  font-family: "Fraunces", serif;
+  font-size: 34px;
+}
+
+.about-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.about-card {
+  align-content: start;
+}
+
+.about-list {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--ink);
+}
+
 .hint {
   position: absolute;
   bottom: 36px;
@@ -866,6 +899,10 @@ button.tiny {
   }
 
   .analysis-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .about-grid {
     grid-template-columns: 1fr;
   }
 }
