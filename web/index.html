@@ -15,6 +15,33 @@
   <script type="module" src="app.js"></script>
 </head>
 <body>
+  <div id="splashScreen" class="splash-screen" role="dialog" aria-modal="true" aria-label="Willkommen im PDL-Viewer">
+    <div class="splash-card">
+      <p class="splash-kicker">Supply Chain Graph Explorer</p>
+      <h1 class="splash-title">PDL-Viewer</h1>
+      <p class="splash-subtitle">Interaktive Analyse von PDL-YAML Szenarien.</p>
+      <div class="splash-network" aria-hidden="true">
+        <span class="splash-link splash-link-1"></span>
+        <span class="splash-link splash-link-2"></span>
+        <span class="splash-link splash-link-3"></span>
+        <span class="splash-link splash-link-4"></span>
+        <span class="splash-node splash-node-1"></span>
+        <span class="splash-node splash-node-2"></span>
+        <span class="splash-node splash-node-3"></span>
+        <span class="splash-node splash-node-4"></span>
+        <span class="splash-node splash-node-5"></span>
+      </div>
+      <div class="splash-chips">
+        <span class="splash-chip">YAML laden</span>
+        <span class="splash-chip">Graph erkunden</span>
+        <span class="splash-chip">Kaskaden verstehen</span>
+      </div>
+      <div class="splash-actions">
+        <button id="splashStartBtn" type="button">Starten</button>
+        <button id="splashExampleBtn" class="ghost" type="button">Beispiel laden</button>
+      </div>
+    </div>
+  </div>
   <div class="topbar">
     <div class="tabs">
       <button id="tabGraph" class="tab active" type="button">Graph</button>

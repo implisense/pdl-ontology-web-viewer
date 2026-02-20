@@ -154,7 +154,10 @@ const elements = {
   tutorialNext: document.getElementById("tutorialNext"),
   tutorialTitle: document.getElementById("tutorialTitle"),
   tutorialBody: document.getElementById("tutorialBody"),
-  tutorialStep: document.getElementById("tutorialStep")
+  tutorialStep: document.getElementById("tutorialStep"),
+  splashScreen: document.getElementById("splashScreen"),
+  splashStartBtn: document.getElementById("splashStartBtn"),
+  splashExampleBtn: document.getElementById("splashExampleBtn")
 };
 
 const LOCATION_FLAG_BY_KEY = {
@@ -2496,6 +2499,8 @@ const TUTORIAL_STEPS = [
 
 const tutorialState = { step: 0, open: false };
 const TUTORIAL_SEEN_KEY = "pdl-tutorial-seen";
+const SPLASH_AUTO_HIDE_MS = 2400;
+const SPLASH_FADE_MS = 280;
 
 function openTutorial() {
   tutorialState.step = 0;
@@ -2541,6 +2546,63 @@ function prevStep() {
   }
 }
 
+function shouldOpenTutorialOnLoad() {
+  return !localStorage.getItem(TUTORIAL_SEEN_KEY);
+}
+
+function initSplashScreen() {
+  if (!elements.splashScreen) {
+    if (shouldOpenTutorialOnLoad()) openTutorial();
+    return;
+  }
+
+  const shouldOpenTutorial = shouldOpenTutorialOnLoad();
+  let closed = false;
+  let autoTimer = null;
+
+  document.body.classList.add("splash-open");
+
+  const finishSplash = ({ loadExampleScenario = false } = {}) => {
+    if (closed) return;
+    closed = true;
+
+    if (autoTimer) {
+      window.clearTimeout(autoTimer);
+      autoTimer = null;
+    }
+    document.removeEventListener("keydown", onSplashKeydown);
+
+    elements.splashScreen.classList.add("is-leaving");
+
+    window.setTimeout(() => {
+      elements.splashScreen.classList.add("hidden");
+      elements.splashScreen.setAttribute("aria-hidden", "true");
+      document.body.classList.remove("splash-open");
+
+      if (loadExampleScenario) {
+        loadExample();
+      }
+      if (shouldOpenTutorial) {
+        openTutorial();
+      }
+    }, SPLASH_FADE_MS);
+  };
+
+  const onSplashKeydown = (event) => {
+    if (event.key === "Escape") {
+      finishSplash();
+    }
+  };
+
+  document.addEventListener("keydown", onSplashKeydown);
+  elements.splashStartBtn?.addEventListener("click", () => finishSplash());
+  elements.splashExampleBtn?.addEventListener("click", () => finishSplash({ loadExampleScenario: true }));
+
+  autoTimer = window.setTimeout(() => {
+    finishSplash();
+  }, SPLASH_AUTO_HIDE_MS);
+}
+
 wireUI();
 
 elements.tutorialBtn.addEventListener("click", openTutorial);
@@ -2551,6 +2613,4 @@ elements.tutorialOverlay.addEventListener("click", (e) => {
   if (e.target === elements.tutorialOverlay) closeTutorial();
 });
 
-if (!localStorage.getItem(TUTORIAL_SEEN_KEY)) {
-  openTutorial();
-}
+initSplashScreen();

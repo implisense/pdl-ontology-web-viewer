@@ -822,6 +822,207 @@ button.tiny {
   border: 1px solid var(--stroke);
 }
 
+
+body.splash-open {
+  overflow: hidden;
+}
+
+.splash-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background:
+    radial-gradient(circle at 12% 18%, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.2) 38%),
+    linear-gradient(145deg, rgba(246, 241, 232, 0.96), rgba(233, 241, 255, 0.95));
+  opacity: 1;
+  transition: opacity 0.28s ease;
+}
+
+.splash-screen.is-leaving {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.splash-card {
+  width: min(560px, 92vw);
+  border-radius: 26px;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  background: rgba(255, 255, 255, 0.93);
+  box-shadow: 0 32px 86px rgba(15, 23, 42, 0.22);
+  backdrop-filter: blur(10px);
+  padding: 30px 28px;
+  display: grid;
+  gap: 16px;
+  text-align: center;
+}
+
+.splash-kicker {
+  margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.splash-title {
+  margin: 0;
+  font-family: "Fraunces", serif;
+  font-size: clamp(36px, 5vw, 54px);
+  line-height: 1.05;
+}
+
+.splash-subtitle {
+  margin: 0;
+  font-size: 15px;
+  color: var(--muted);
+}
+
+.splash-network {
+  width: min(360px, 78vw);
+  height: 150px;
+  margin: 2px auto;
+  position: relative;
+}
+
+.splash-node,
+.splash-link {
+  position: absolute;
+}
+
+.splash-node {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.86);
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.2);
+  animation: splashPulse 2.2s ease-in-out infinite;
+}
+
+.splash-node-1 {
+  left: 20px;
+  top: 86px;
+  background: #16a34a;
+  animation-delay: 0s;
+}
+
+.splash-node-2 {
+  left: 92px;
+  top: 42px;
+  background: #f59e0b;
+  animation-delay: 0.2s;
+}
+
+.splash-node-3 {
+  left: 172px;
+  top: 20px;
+  background: #dc2626;
+  animation-delay: 0.36s;
+}
+
+.splash-node-4 {
+  left: 252px;
+  top: 58px;
+  background: #7c3aed;
+  animation-delay: 0.5s;
+}
+
+.splash-node-5 {
+  left: 318px;
+  top: 100px;
+  background: #0ea5e9;
+  animation-delay: 0.65s;
+}
+
+.splash-link {
+  height: 2px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.28);
+  transform-origin: left center;
+  animation: splashFlow 2.2s ease-in-out infinite;
+}
+
+.splash-link-1 {
+  left: 35px;
+  top: 96px;
+  width: 80px;
+  transform: rotate(-31deg);
+  animation-delay: 0.04s;
+}
+
+.splash-link-2 {
+  left: 107px;
+  top: 54px;
+  width: 82px;
+  transform: rotate(-18deg);
+  animation-delay: 0.15s;
+}
+
+.splash-link-3 {
+  left: 188px;
+  top: 34px;
+  width: 86px;
+  transform: rotate(28deg);
+  animation-delay: 0.3s;
+}
+
+.splash-link-4 {
+  left: 270px;
+  top: 74px;
+  width: 84px;
+  transform: rotate(34deg);
+  animation-delay: 0.42s;
+}
+
+.splash-chips {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+
+.splash-chip {
+  padding: 6px 11px;
+  border-radius: 999px;
+  border: 1px solid rgba(37, 99, 235, 0.2);
+  background: rgba(37, 99, 235, 0.08);
+  color: #1e3a8a;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.splash-actions {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+@keyframes splashPulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.9;
+  }
+  50% {
+    transform: scale(1.18);
+    opacity: 1;
+  }
+}
+
+@keyframes splashFlow {
+  0%, 100% {
+    opacity: 0.32;
+  }
+  50% {
+    opacity: 0.72;
+  }
+}
+
 /* Tutorial Modal */
 .tutorial-overlay {
   position: fixed;
@@ -998,5 +1199,26 @@ button.tiny {
 
   .about-grid {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .splash-card {
+    padding: 24px 18px;
+    gap: 14px;
+  }
+
+  .splash-title {
+    font-size: 38px;
+  }
+
+  .splash-subtitle {
+    font-size: 14px;
+  }
+
+  .splash-network {
+    transform: scale(0.92);
+    transform-origin: center;
+    margin: -4px auto;
   }
 }
