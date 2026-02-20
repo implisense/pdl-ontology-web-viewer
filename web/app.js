@@ -1854,8 +1854,17 @@ function buildNetwork(graph) {
 
   createCheckboxList(elements.nodeTypeFilters, nodeTypes);
   createCheckboxList(elements.edgeTypeFilters, edgeTypes);
-  if (state.conflictMode) {
-    setConflictMode(true);
+
+  // On each newly loaded file, default to entity + event node types.
+  state.conflictMode = false;
+  state.savedNodeTypeSelection = null;
+  elements.conflictMode.checked = false;
+  setConflictMode(false);
+
+  const defaultNodeTypes = new Set(["entity", "event"]);
+  const activeDefaultTypes = new Set(nodeTypes.filter((type) => defaultNodeTypes.has(type)));
+  if (activeDefaultTypes.size) {
+    setNodeTypeSelection(activeDefaultTypes);
   }
 
   if (sectors.length) {
