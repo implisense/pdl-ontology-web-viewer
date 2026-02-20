@@ -178,6 +178,20 @@ function countryCodeToFlag(code) {
   return String.fromCodePoint(...Array.from(upper).map((char) => 127397 + char.charCodeAt(0)));
 }
 
+const EVENT_BADGE_BY_SUBTYPE = {
+  infrastructure_failure: "🏭",
+  market_shock: "📉",
+  regulatory: "⚖️",
+  natural_disaster: "🌪️",
+  geopolitical: "🛡️",
+  pandemic: "🦠"
+};
+
+function getEventBadge(subtype) {
+  if (!subtype || typeof subtype !== "string") return "";
+  return EVENT_BADGE_BY_SUBTYPE[subtype] || "⚠️";
+}
+
 function getLocationBadge(location) {
   if (!location || typeof location !== "string") return "";
   const key = location.trim().toLowerCase();
@@ -227,9 +241,11 @@ function addVisualStyles(graph) {
     const isTimeline = node.type === "timeline_entry";
     const nodeLabel = node.label || node.id;
     const locationBadge = getLocationBadge(node.data?.location);
+    const eventBadge = node.type === "event" ? getEventBadge(node.subtype) : "";
+    const badgePrefix = [eventBadge, locationBadge].filter(Boolean).join(" ");
     const styled = {
       ...node,
-      label: locationBadge ? locationBadge + " " + nodeLabel : nodeLabel,
+      label: badgePrefix ? badgePrefix + " " + nodeLabel : nodeLabel,
       shape: isScenario ? "box" : "dot",
       size: isScenario
         ? 26
@@ -244,7 +260,7 @@ function addVisualStyles(graph) {
       font: {
         color: "#0b1220",
         face: "Space Grotesk",
-        size: locationBadge ? 17 : 15
+        size: badgePrefix ? 17 : 15
       },
       borderWidth: isScenario ? 2 : 1,
       title: buildTooltip(node)
