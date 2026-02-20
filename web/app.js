@@ -25,6 +25,11 @@ const state = {
   supplyDim: true,
   rawText: null,
   fileName: null,
+  yamlSearch: {
+    matches: [],
+    index: -1,
+    term: ""
+  },
   analysis: {
     path: null,
     pathHighlight: false,
@@ -100,6 +105,11 @@ const elements = {
   yamlTree: document.getElementById("yamlTree"),
   yamlStatus: document.getElementById("yamlStatus"),
   yamlSearch: document.getElementById("yamlSearch"),
+  yamlSearchPanel: document.getElementById("yamlSearchPanel"),
+  yamlSearchCount: document.getElementById("yamlSearchCount"),
+  yamlSearchList: document.getElementById("yamlSearchList"),
+  yamlSearchPrev: document.getElementById("yamlSearchPrev"),
+  yamlSearchNext: document.getElementById("yamlSearchNext"),
   yamlExpand: document.getElementById("yamlExpand"),
   yamlCollapse: document.getElementById("yamlCollapse"),
   validationStatus: document.getElementById("validationStatus"),
@@ -1451,8 +1461,53 @@ function formatYamlScalar(value) {
 }
 
 function describeYamlValue(value) {
-  if (Array.isArray(value)) return "[" + value.length + "]";
+  if (Array.isArray(value)) return `Array (${value.length})`;
+  if (value && typeof value === "object") return `Objekt (${Object.keys(value).length})`;
   return null;
+}
+
+function formatYamlPath(pathSegments) {
+  return pathSegments.reduce((acc, segment) => {
+    if (!acc) return segment;
+    return segment.startsWith("[") ? `${acc}${segment}` : `${acc}.${segment}`;
+  }, "");
+}
+
+async function copyYamlPath(pathLabel) {
+  if (!pathLabel) return;
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(pathLabel);
+    } else {
+      const input = document.createElement("textarea");
+      input.value = pathLabel;
+      document.body.appendChild(input);
+      input.select();
+      document.execCommand("copy");
+      document.body.removeChild(input);
+    }
+    if (elements.yamlStatus) {
+      elements.yamlStatus.textContent = `Pfad kopiert: ${pathLabel}`;
+    }
+  } catch (error) {
+    if (elements.yamlStatus) {
+      elements.yamlStatus.textContent = "Pfad konnte nicht kopiert werden.";
+    }
+  }
+}
+
+function createYamlCopyButton(pathLabel) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "yaml-copy";
+  button.textContent = "Pfad kopieren";
+  button.title = pathLabel;
+  button.addEventListener("click", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    copyYamlPath(pathLabel);
+  });
+  return button;
 }
 
 function resolveYamlNodeId(value, context) {
@@ -1478,18 +1533,41 @@ function buildYamlNode(key, value, depth = 0, context = {}) {
     rootKey: context.rootKey,
     parentKey: context.parentKey ?? null,
     index: context.index ?? null,
-    cascadeId: context.cascadeId ?? null
+    cascadeId: context.cascadeId ?? null,
+    pathSegments: context.pathSegments || []
   };
-  const searchText = `${key} ${typeof value === "object" ? "" : value}`.toLowerCase();
+  const pathSegments = [...currentContext.pathSegments, key];
+  const pathLabel = formatYamlPath(pathSegments);
+  const isObject = value && typeof value === "object";
+  const rawValue = isObject ? "" : value === undefined ? "" : String(value);
+  const searchText = `${key} ${rawValue} ${pathLabel}`.toLowerCase();
 
-  if (value && typeof value === "object") {
+  if (isObject) {
     const details = document.createElement("details");
     details.open = depth < 1;
     details.dataset.searchText = searchText;
+    details.dataset.yamlPath = pathLabel;
 
     const summary = document.createElement("summary");
+
+    const keySpan = document.createElement("span");
+    keySpan.className = "yaml-key";
+    keySpan.textContent = key;
+    summary.appendChild(keySpan);
+
     const meta = describeYamlValue(value);
-    summary.innerHTML = `<span class="yaml-key">${key}</span>${meta ? `<span class="yaml-meta">${meta}</span>` : ""}`;
+    if (meta) {
+      const metaSpan = document.createElement("span");
+      metaSpan.className = "yaml-meta";
+      metaSpan.textContent = meta;
+      summary.appendChild(metaSpan);
+    }
+
+    const actions = document.createElement("span");
+    actions.className = "yaml-actions";
+    actions.appendChild(createYamlCopyButton(pathLabel));
+    summary.appendChild(actions);
+
     details.appendChild(summary);
 
     const children = document.createElement("div");
@@ -1501,7 +1579,8 @@ function buildYamlNode(key, value, depth = 0, context = {}) {
           ...currentContext,
           parentKey: key,
           index,
-          cascadeId: currentContext.cascadeId
+          cascadeId: currentContext.cascadeId,
+          pathSegments
         };
         children.appendChild(buildYamlNode(`[${index}]`, item, depth + 1, nextContext));
       });
@@ -1513,7 +1592,8 @@ function buildYamlNode(key, value, depth = 0, context = {}) {
           ...currentContext,
           parentKey: key,
           index: null,
-          cascadeId
+          cascadeId,
+          pathSegments
         };
         children.appendChild(buildYamlNode(childKey, childValue, depth + 1, nextContext));
       });
@@ -1525,28 +1605,108 @@ function buildYamlNode(key, value, depth = 0, context = {}) {
 
   const leaf = document.createElement("div");
   leaf.className = "yaml-leaf";
-  leaf.innerHTML = `<span class="yaml-key">${key}</span><span class="yaml-sep">:</span><span class="yaml-value">${formatYamlScalar(value)}</span>`;
   leaf.dataset.searchText = searchText;
+  leaf.dataset.yamlPath = pathLabel;
+
+  const actions = document.createElement("span");
+  actions.className = "yaml-actions";
+  actions.appendChild(createYamlCopyButton(pathLabel));
+  leaf.appendChild(actions);
+
+  const keySpan = document.createElement("span");
+  keySpan.className = "yaml-key";
+  keySpan.textContent = key;
+  leaf.appendChild(keySpan);
+
+  const sepSpan = document.createElement("span");
+  sepSpan.className = "yaml-sep";
+  sepSpan.textContent = ":";
+  leaf.appendChild(sepSpan);
+
+  const valueSpan = document.createElement("span");
+  valueSpan.className = "yaml-value";
+  valueSpan.textContent = formatYamlScalar(value);
+  leaf.appendChild(valueSpan);
+
   return leaf;
 }
 
-function renderYamlTree(data) {
-  if (!elements.yamlTree) return;
-  elements.yamlTree.innerHTML = "";
-  if (!data) {
-    elements.yamlTree.innerHTML = "<p class=\"details-empty\">Noch keine Datei geladen.</p>";
-    if (elements.yamlSearch) elements.yamlSearch.value = "";
-    return;
+function renderYamlSearchList() {
+  if (!elements.yamlSearchList) return;
+  elements.yamlSearchList.innerHTML = "";
+
+  state.yamlSearch.matches.forEach((item, index) => {
+    const li = document.createElement("li");
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "yaml-search-item";
+    button.classList.toggle("active", index === state.yamlSearch.index);
+
+    const path = document.createElement("span");
+    path.className = "yaml-search-item-path";
+    path.textContent = item.dataset.yamlPath || "(ohne Pfad)";
+
+    const snippet = document.createElement("span");
+    snippet.className = "yaml-search-item-snippet";
+    snippet.textContent = (item.textContent || "").replace("Pfad kopieren", "").trim().replace(/\s+/g, " ").slice(0, 120);
+
+    button.appendChild(path);
+    button.appendChild(snippet);
+    button.addEventListener("click", () => setYamlSearchSelection(index));
+
+    li.appendChild(button);
+    elements.yamlSearchList.appendChild(li);
+  });
+}
+
+function updateYamlSearchPanel() {
+  if (!elements.yamlSearchPanel) return;
+  const hasTerm = Boolean(state.yamlSearch.term);
+  const total = state.yamlSearch.matches.length;
+  elements.yamlSearchPanel.classList.toggle("hidden", !hasTerm);
+
+  if (elements.yamlSearchCount) {
+    elements.yamlSearchCount.textContent = total
+      ? `Treffer ${state.yamlSearch.index + 1} / ${total}`
+      : "0 Treffer";
   }
 
-  const container = document.createElement("div");
-  Object.entries(data).forEach(([key, value]) => {
-    container.appendChild(buildYamlNode(key, value, 0, { rootKey: key }));
-  });
-  elements.yamlTree.appendChild(container);
-  if (elements.yamlSearch && elements.yamlSearch.value) {
-    applyYamlSearch(elements.yamlSearch.value);
+  if (elements.yamlSearchPrev) elements.yamlSearchPrev.disabled = total < 2;
+  if (elements.yamlSearchNext) elements.yamlSearchNext.disabled = total < 2;
+
+  renderYamlSearchList();
+}
+
+function revealYamlItem(item) {
+  let parent = item?.parentElement;
+  while (parent && parent !== elements.yamlTree) {
+    if (parent.tagName === "DETAILS") {
+      parent.open = true;
+      parent.classList.remove("yaml-hidden");
+    }
+    parent = parent.parentElement;
   }
+}
+
+function setYamlSearchSelection(index, { scroll = true } = {}) {
+  const matches = state.yamlSearch.matches;
+  if (!matches.length) return;
+
+  const total = matches.length;
+  const wrapped = ((index % total) + total) % total;
+  state.yamlSearch.index = wrapped;
+
+  matches.forEach((item, i) => {
+    item.classList.toggle("yaml-match-current", i === wrapped);
+  });
+
+  const current = matches[wrapped];
+  revealYamlItem(current);
+  if (scroll) {
+    current.scrollIntoView({ block: "center", behavior: "smooth" });
+  }
+
+  updateYamlSearchPanel();
 }
 
 function clearYamlHighlights() {
@@ -1557,36 +1717,93 @@ function clearYamlHighlights() {
   elements.yamlTree.querySelectorAll(".yaml-hidden").forEach((el) => {
     el.classList.remove("yaml-hidden");
   });
+  elements.yamlTree.querySelectorAll(".yaml-match-current").forEach((el) => {
+    el.classList.remove("yaml-match-current");
+  });
+}
+
+function focusNextYamlMatch(step = 1) {
+  const total = state.yamlSearch.matches.length;
+  if (!total) return;
+  const start = state.yamlSearch.index >= 0 ? state.yamlSearch.index : 0;
+  setYamlSearchSelection(start + step);
 }
 
 function applyYamlSearch(query) {
   if (!elements.yamlTree) return;
   const term = query.trim().toLowerCase();
+  state.yamlSearch.term = term;
   clearYamlHighlights();
-  if (!term) return;
 
-  const matches = [];
-  const items = elements.yamlTree.querySelectorAll("[data-search-text]");
-  items.forEach((item) => {
-    const text = item.dataset.searchText || "";
-    if (text.includes(term)) {
-      matches.push(item);
+  if (!term) {
+    state.yamlSearch.matches = [];
+    state.yamlSearch.index = -1;
+    updateYamlSearchPanel();
+    return;
+  }
+
+  const items = Array.from(elements.yamlTree.querySelectorAll("[data-search-text]"));
+  const matches = items.filter((item) => (item.dataset.searchText || "").includes(term));
+  const visible = new Set(matches);
+
+  matches.forEach((item) => {
+    item.classList.add("yaml-highlight");
+    let parent = item.parentElement;
+    while (parent && parent !== elements.yamlTree) {
+      if (parent.matches && parent.matches("[data-search-text]")) {
+        visible.add(parent);
+      }
+      if (parent.tagName === "DETAILS") {
+        parent.open = true;
+      }
+      parent = parent.parentElement;
     }
   });
 
   items.forEach((item) => {
-    if (!matches.includes(item)) {
+    if (!visible.has(item)) {
       item.classList.add("yaml-hidden");
     }
   });
 
-  matches.forEach((item) => {
-    item.classList.add("yaml-highlight");
-    const parentDetails = item.closest("details");
-    if (parentDetails) {
-      parentDetails.open = true;
-    }
+  state.yamlSearch.matches = matches;
+  state.yamlSearch.index = matches.length ? 0 : -1;
+
+  if (matches.length) {
+    setYamlSearchSelection(0, { scroll: false });
+  } else {
+    updateYamlSearchPanel();
+  }
+}
+
+function renderYamlTree(data) {
+  if (!elements.yamlTree) return;
+  elements.yamlTree.innerHTML = "";
+  if (!data) {
+    elements.yamlTree.innerHTML = "<p class=\"details-empty\">Noch keine Datei geladen.</p>";
+    if (elements.yamlSearch) elements.yamlSearch.value = "";
+    state.yamlSearch.matches = [];
+    state.yamlSearch.index = -1;
+    state.yamlSearch.term = "";
+    updateYamlSearchPanel();
+    return;
+  }
+
+  const container = document.createElement("div");
+  Object.entries(data).forEach(([key, value]) => {
+    container.appendChild(buildYamlNode(key, value, 0, { rootKey: key, pathSegments: [] }));
   });
+  elements.yamlTree.appendChild(container);
+
+  if (elements.yamlSearch && elements.yamlSearch.value) {
+    applyYamlSearch(elements.yamlSearch.value);
+  } else {
+    clearYamlHighlights();
+    state.yamlSearch.matches = [];
+    state.yamlSearch.index = -1;
+    state.yamlSearch.term = "";
+    updateYamlSearchPanel();
+  }
 }
 
 function setAllYamlDetails(open) {
@@ -2279,6 +2496,18 @@ function wireUI() {
     elements.yamlSearch.addEventListener("input", (event) => {
       applyYamlSearch(event.target.value);
     });
+    elements.yamlSearch.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        focusNextYamlMatch(event.shiftKey ? -1 : 1);
+      }
+    });
+  }
+  if (elements.yamlSearchPrev) {
+    elements.yamlSearchPrev.addEventListener("click", () => focusNextYamlMatch(-1));
+  }
+  if (elements.yamlSearchNext) {
+    elements.yamlSearchNext.addEventListener("click", () => focusNextYamlMatch(1));
   }
 
   document.querySelectorAll("[data-supply]").forEach((button) => {

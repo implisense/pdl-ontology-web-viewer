@@ -261,6 +261,16 @@
           <div class="search">
             <input id="yamlSearch" type="search" placeholder="Suche nach Schlüssel oder Wert" />
           </div>
+          <div id="yamlSearchPanel" class="yaml-search-panel hidden">
+            <div class="yaml-search-toolbar">
+              <span id="yamlSearchCount" class="yaml-search-count">0 Treffer</span>
+              <div class="yaml-search-nav">
+                <button id="yamlSearchPrev" class="tiny ghost" type="button" disabled>Zurück</button>
+                <button id="yamlSearchNext" class="tiny ghost" type="button" disabled>Weiter</button>
+              </div>
+            </div>
+            <ul id="yamlSearchList" class="yaml-search-list"></ul>
+          </div>
           <p id="yamlStatus" class="status">Noch keine Datei geladen.</p>
           <div class="graph-actions">
             <button id="yamlExpand">Alles aufklappen</button>
