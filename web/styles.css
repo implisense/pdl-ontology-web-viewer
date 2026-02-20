@@ -738,6 +738,28 @@ button.tiny {
   color: var(--ink);
 }
 
+.graph-scenario-title {
+  position: absolute;
+  top: 30px;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: calc(100% - 120px);
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--stroke);
+  background: rgba(255, 255, 255, 0.9);
+  color: var(--ink);
+  font-family: "Fraunces", serif;
+  font-size: 20px;
+  font-weight: 600;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+  z-index: 3;
+}
+
 .hint {
   position: absolute;
   bottom: 36px;
@@ -898,6 +920,11 @@ button.tiny {
 }
 
 @media (max-width: 980px) {
+  .graph-scenario-title {
+    top: 18px;
+    max-width: calc(100% - 40px);
+    font-size: 16px;
+  }
   .app {
     grid-template-columns: 1fr;
   }

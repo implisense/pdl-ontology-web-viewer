@@ -126,6 +126,7 @@ const elements = {
   supplyDim: document.getElementById("supplyDim"),
   legend: document.getElementById("legend"),
   graph: document.getElementById("graph"),
+  graphScenarioTitle: document.getElementById("graphScenarioTitle"),
   fitBtn: document.getElementById("fitBtn"),
   stabilizeBtn: document.getElementById("stabilizeBtn"),
   exportJson: document.getElementById("exportJson"),
@@ -695,6 +696,18 @@ function countByType(type) {
 function setStatus(message, isError = false) {
   elements.status.textContent = message;
   elements.status.style.color = isError ? "#b91c1c" : "#4b5563";
+}
+
+function setGraphScenarioTitle(scenario) {
+  if (!elements.graphScenarioTitle) return;
+  const title = scenario?.name || scenario?.title || scenario?.id || "";
+  if (!title) {
+    elements.graphScenarioTitle.textContent = "";
+    elements.graphScenarioTitle.classList.add("hidden");
+    return;
+  }
+  elements.graphScenarioTitle.textContent = title;
+  elements.graphScenarioTitle.classList.remove("hidden");
 }
 
 function setDetails(payload) {
@@ -1939,6 +1952,7 @@ async function loadYamlText(name, text) {
     state.rawText = text;
     state.fileName = name;
     updateFileLabel();
+    setGraphScenarioTitle(pdl?.scenario);
     renderYamlTree(pdl);
     if (elements.yamlStatus) {
       elements.yamlStatus.textContent = `Geladen: ${name}`;
@@ -1950,6 +1964,7 @@ async function loadYamlText(name, text) {
     state.rawText = null;
     state.fileName = null;
     updateFileLabel();
+    setGraphScenarioTitle(null);
     renderYamlTree(null);
     state.validation.errors = [];
     state.validation.warnings = [];
@@ -2001,6 +2016,7 @@ async function loadExample() {
 
 function wireUI() {
   state.uiState.pending = readUrlState();
+  setGraphScenarioTitle(null);
   elements.supplyDim.checked = state.supplyDim;
   updateFileLabel();
   setActiveTab("graph");
