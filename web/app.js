@@ -1261,8 +1261,7 @@ function formatYamlScalar(value) {
 }
 
 function describeYamlValue(value) {
-  if (Array.isArray(value)) return `[${value.length}]`;
-  if (value && typeof value === "object") return `{${Object.keys(value).length}}`;
+  if (Array.isArray(value)) return "[" + value.length + "]";
   return null;
 }
 
