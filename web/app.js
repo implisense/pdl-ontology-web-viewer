@@ -1,4 +1,4 @@
-import { parse as parseYaml } from "./vendor/yaml/index.js";
+import { parse as parseYaml, stringify as stringifyYaml } from "./vendor/yaml/index.js";
 import {
   convertToGraphJson,
   buildAdjacency,
@@ -147,6 +147,7 @@ const elements = {
   fitBtn: document.getElementById("fitBtn"),
   stabilizeBtn: document.getElementById("stabilizeBtn"),
   exportJson: document.getElementById("exportJson"),
+  exportYaml: document.getElementById("exportYaml"),
   exportPng: document.getElementById("exportPng"),
   exportStatus: document.getElementById("exportStatus"),
   analysisStart: document.getElementById("analysisStart"),
@@ -1397,13 +1398,8 @@ function downloadBlob(filename, blob) {
   URL.revokeObjectURL(link.href);
 }
 
-function exportFilteredJson() {
-  if (!state.analysis.filteredNodes.length) {
-    setExportStatus("Kein Graph geladen.", true);
-    return;
-  }
-  const baseName = state.fileName ? state.fileName.replace(/\.[^/.]+$/, "") : "graph";
-  const payload = {
+function buildFilteredExportPayload() {
+  return {
     metadata: {
       ...state.graph?.metadata,
       exported_at: new Date().toISOString(),
@@ -1412,9 +1408,35 @@ function exportFilteredJson() {
     nodes: state.analysis.filteredNodes.map(stripNodeForExport),
     edges: state.analysis.filteredEdges.map(stripEdgeForExport)
   };
+}
+
+function exportFilteredJson() {
+  if (!state.analysis.filteredNodes.length) {
+    setExportStatus("Kein Graph geladen.", true);
+    return;
+  }
+  const baseName = state.fileName ? state.fileName.replace(/\.[^/.]+$/, "") : "graph";
+  const payload = buildFilteredExportPayload();
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
   downloadBlob(`${baseName}-filtered.json`, blob);
   setExportStatus("JSON-Export erstellt.");
+}
+
+function exportFilteredYaml() {
+  if (!state.analysis.filteredNodes.length) {
+    setExportStatus("Kein Graph geladen.", true);
+    return;
+  }
+  const baseName = state.fileName ? state.fileName.replace(/\.[^/.]+$/, "") : "graph";
+  const payload = buildFilteredExportPayload();
+  const yamlText = stringifyYaml(payload, null, {
+    indent: 2,
+    lineWidth: 0,
+    sortMapEntries: false
+  });
+  const blob = new Blob([yamlText], { type: "application/x-yaml" });
+  downloadBlob(`${baseName}-filtered.yaml`, blob);
+  setExportStatus("YAML-Export erstellt.");
 }
 
 function exportPng() {
@@ -2496,6 +2518,9 @@ function wireUI() {
   });
   if (elements.exportJson) {
     elements.exportJson.addEventListener("click", exportFilteredJson);
+  }
+  if (elements.exportYaml) {
+    elements.exportYaml.addEventListener("click", exportFilteredYaml);
   }
   if (elements.exportPng) {
     elements.exportPng.addEventListener("click", exportPng);
