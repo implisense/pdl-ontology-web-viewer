@@ -644,6 +644,46 @@ function applyLabelDensity(nodes) {
   });
 }
 
+function getMostConnectedNodeId(nodes, edges) {
+  if (!nodes.length) return null;
+
+  const degree = new Map(nodes.map((node) => [node.id, 0]));
+  edges.forEach((edge) => {
+    if (degree.has(edge.from)) degree.set(edge.from, (degree.get(edge.from) || 0) + 1);
+    if (degree.has(edge.to)) degree.set(edge.to, (degree.get(edge.to) || 0) + 1);
+  });
+
+  const typeRank = {
+    entity: 0,
+    event: 1,
+    cascade: 2,
+    supply_chain: 3,
+    timeline_entry: 4,
+    scenario: 5
+  };
+
+  const ranked = nodes
+    .filter((node) => node.type !== "scenario")
+    .map((node) => ({
+      id: node.id,
+      type: node.type,
+      degree: degree.get(node.id) || 0
+    }));
+
+  const candidates = ranked.length
+    ? ranked
+    : nodes.map((node) => ({ id: node.id, type: node.type, degree: degree.get(node.id) || 0 }));
+
+  candidates.sort((a, b) => {
+    if (b.degree !== a.degree) return b.degree - a.degree;
+    const rankA = typeRank[a.type] ?? 99;
+    const rankB = typeRank[b.type] ?? 99;
+    if (rankA !== rankB) return rankA - rankB;
+    return a.id.localeCompare(b.id);
+  });
+
+  return candidates[0]?.id || null;
+}
 function applyFilters() {
   if (!state.graph) return;
   const nodeTypes = gatherFilters(elements.nodeTypeFilters);
@@ -737,6 +777,18 @@ function applyFilters() {
     finalEdges = finalEdges.map((edge) =>
       state.analysis.path.edgeIds.has(edge.id) ? highlightPathEdge(edge) : edge
     );
+  }
+
+  const crownNodeId = getMostConnectedNodeId(finalNodes, finalEdges);
+  if (crownNodeId) {
+    finalNodes = finalNodes.map((node) => {
+      if (node.id !== crownNodeId) return node;
+      const baseLabel = node._baseLabel || node.label || node.id;
+      return {
+        ...node,
+        _baseLabel: "👑 " + baseLabel
+      };
+    });
   }
 
   finalNodes = applyLabelDensity(finalNodes);
