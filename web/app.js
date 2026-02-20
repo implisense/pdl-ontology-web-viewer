@@ -152,6 +152,37 @@ const elements = {
 };
 
 function addVisualStyles(graph) {
+  const entityIds = new Set(
+    graph.nodes.filter((node) => node.type === "entity").map((node) => node.id)
+  );
+  const entityDegree = new Map();
+  entityIds.forEach((id) => entityDegree.set(id, 0));
+
+  graph.edges.forEach((edge) => {
+    if (entityIds.has(edge.from)) {
+      entityDegree.set(edge.from, (entityDegree.get(edge.from) || 0) + 1);
+    }
+    if (entityIds.has(edge.to)) {
+      entityDegree.set(edge.to, (entityDegree.get(edge.to) || 0) + 1);
+    }
+  });
+
+  const logDegrees = Array.from(entityDegree.values(), (degree) => Math.log1p(degree));
+  const minLogDegree = logDegrees.length ? Math.min(...logDegrees) : 0;
+  const maxLogDegree = logDegrees.length ? Math.max(...logDegrees) : 0;
+  const entityMinSize = 16;
+  const entityMaxSize = 28;
+
+  function getEntitySize(nodeId) {
+    const degree = entityDegree.get(nodeId) || 0;
+    const logDegree = Math.log1p(degree);
+    if (maxLogDegree === minLogDegree) {
+      return (entityMinSize + entityMaxSize) / 2;
+    }
+    const normalized = (logDegree - minLogDegree) / (maxLogDegree - minLogDegree);
+    return entityMinSize + normalized * (entityMaxSize - entityMinSize);
+  }
+
   graph.nodes = graph.nodes.map((node) => {
     const palette = colors[node.type] || colors.entity;
     const isScenario = node.type === "scenario";
@@ -159,7 +190,15 @@ function addVisualStyles(graph) {
     const styled = {
       ...node,
       shape: isScenario ? "box" : "dot",
-      size: isScenario ? 26 : isTimeline ? 10 : node.type === "entity" ? 19.6 : node.type === "event" ? 9.8 : 14,
+      size: isScenario
+        ? 26
+        : isTimeline
+          ? 10
+          : node.type === "entity"
+            ? getEntitySize(node.id)
+            : node.type === "event"
+              ? 9.8
+              : 14,
       color: palette,
       font: {
         color: "#0b1220",
