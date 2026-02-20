@@ -44,7 +44,9 @@ const state = {
   },
   uiState: {
     pending: null,
-    applying: false
+    applying: false,
+    graphScale: 1,
+    zoomRaf: null
   }
 };
 
@@ -243,9 +245,11 @@ function addVisualStyles(graph) {
     const locationBadge = getLocationBadge(node.data?.location);
     const eventBadge = node.type === "event" ? getEventBadge(node.subtype) : "";
     const badgePrefix = [eventBadge, locationBadge].filter(Boolean).join(" ");
+    const baseLabel = badgePrefix ? badgePrefix + " " + nodeLabel : nodeLabel;
     const styled = {
       ...node,
-      label: badgePrefix ? badgePrefix + " " + nodeLabel : nodeLabel,
+      label: baseLabel,
+      _baseLabel: baseLabel,
       shape: isScenario ? "box" : "dot",
       size: isScenario
         ? 26
@@ -327,13 +331,42 @@ function getNodeCriticality(node) {
   return node.data?.criticality ?? null;
 }
 
+function findNodeTypeInput(type) {
+  const inputs = Array.from(elements.nodeTypeFilters?.querySelectorAll("input[type=checkbox]") || []);
+  return inputs.find((input) => input.value === type) || null;
+}
+
+function toggleNodeTypeFromLegend(type) {
+  const input = findNodeTypeInput(type);
+  if (!input || input.disabled) return;
+  input.checked = !input.checked;
+  applyFilters();
+}
+
+function updateLegendState() {
+  const items = elements.legend?.querySelectorAll(".legend-item") || [];
+  items.forEach((item) => {
+    const type = item.dataset.type;
+    const input = findNodeTypeInput(type);
+    const isActive = input ? input.checked : true;
+    item.classList.toggle("inactive", !isActive);
+    const button = item.querySelector("button");
+    if (button) button.disabled = Boolean(input && input.disabled);
+  });
+}
+
 function renderLegend() {
   elements.legend.innerHTML = "";
   Object.entries(colors).forEach(([type, palette]) => {
     const li = document.createElement("li");
-    li.innerHTML = `<span><span class="swatch" style="background:${palette.background};border:1px solid ${palette.border}"></span>${type}</span>`;
+    li.className = "legend-item";
+    li.dataset.type = type;
+    li.innerHTML = `<button class="legend-button" type="button"><span><span class="swatch" style="background:${palette.background};border:1px solid ${palette.border}"></span>${type}</span></button>`;
+    const button = li.querySelector("button");
+    button?.addEventListener("click", () => toggleNodeTypeFromLegend(type));
     elements.legend.appendChild(li);
   });
+  updateLegendState();
 }
 
 function createCheckboxList(container, values, labelMap = {}) {
@@ -548,6 +581,33 @@ function applyWarningEdge(edge) {
   };
 }
 
+function scheduleApplyFilters() {
+  if (state.uiState.zoomRaf) return;
+  state.uiState.zoomRaf = requestAnimationFrame(() => {
+    state.uiState.zoomRaf = null;
+    applyFilters();
+  });
+}
+
+function getLabelThreshold(nodeType) {
+  if (nodeType === "scenario") return 0;
+  if (nodeType === "entity" || nodeType === "event") return 0.35;
+  if (nodeType === "cascade" || nodeType === "supply_chain") return 0.55;
+  return 0.75;
+}
+
+function applyLabelDensity(nodes) {
+  const scale = state.uiState.graphScale || 1;
+  return nodes.map((node) => {
+    const baseLabel = node._baseLabel || node.label || node.id;
+    const shouldShow = node.id === state.selectedNodeId || scale >= getLabelThreshold(node.type);
+    return {
+      ...node,
+      label: shouldShow ? baseLabel : ""
+    };
+  });
+}
+
 function applyFilters() {
   if (!state.graph) return;
   const nodeTypes = gatherFilters(elements.nodeTypeFilters);
@@ -636,6 +696,16 @@ function applyFilters() {
     );
   }
 
+  finalNodes = applyLabelDensity(finalNodes);
+
+  const currentPositions = state.network
+    ? state.network.getPositions(finalNodes.map((node) => node.id))
+    : {};
+  finalNodes = finalNodes.map((node) => {
+    const pos = currentPositions[node.id];
+    return pos ? { ...node, x: pos.x, y: pos.y } : node;
+  });
+
   state.nodesData.clear();
   state.edgesData.clear();
   state.nodesData.add(finalNodes);
@@ -643,6 +713,7 @@ function applyFilters() {
 
   updatePathVisibility(nodeIds, new Set(filteredEdges.map((edge) => edge.id)));
   updateStats(state.analysis.filteredNodes, state.analysis.filteredEdges);
+  updateLegendState();
   updateUrlState();
 }
 
@@ -1820,6 +1891,25 @@ function renderDetailsSelection(item) {
   }
 }
 
+function stabilizeNetworkLayout(iterations = 200) {
+  if (!state.network) return;
+  state.network.setOptions({
+    physics: {
+      enabled: true,
+      stabilization: { iterations },
+      barnesHut: { gravitationalConstant: -20000, springLength: 140 }
+    }
+  });
+
+  const disablePhysics = () => {
+    state.network.setOptions({ physics: { enabled: false } });
+    state.network.off("stabilizationIterationsDone", disablePhysics);
+  };
+
+  state.network.on("stabilizationIterationsDone", disablePhysics);
+  state.network.stabilize(iterations);
+}
+
 function buildNetwork(graph) {
   addVisualStyles(graph);
   state.graph = graph;
@@ -1940,6 +2030,16 @@ function buildNetwork(graph) {
       { nodes: state.nodesData, edges: state.edgesData },
       options
     );
+    state.uiState.graphScale = state.network.getScale();
+
+    state.network.on("zoom", (params) => {
+      if (!params || typeof params.scale !== "number") return;
+      const previousScale = state.uiState.graphScale || params.scale;
+      state.uiState.graphScale = params.scale;
+      if (Math.abs(previousScale - params.scale) > 0.02) {
+        scheduleApplyFilters();
+      }
+    });
 
     state.network.on("click", (params) => {
       if (params.nodes.length) {
@@ -1969,11 +2069,13 @@ function buildNetwork(graph) {
     });
   } else {
     state.network.setData({ nodes: state.nodesData, edges: state.edgesData });
+    state.uiState.graphScale = state.network.getScale();
   }
 
   wireFilterEvents();
   applyPendingUiState();
   applyFilters();
+  stabilizeNetworkLayout(200);
   renderLegend();
   renderDetailsEmpty();
 }
@@ -2112,7 +2214,7 @@ function wireUI() {
     if (state.network) state.network.fit({ animation: true });
   });
   elements.stabilizeBtn.addEventListener("click", () => {
-    if (state.network) state.network.stabilize(200);
+    stabilizeNetworkLayout(200);
   });
   if (elements.exportJson) {
     elements.exportJson.addEventListener("click", exportFilteredJson);

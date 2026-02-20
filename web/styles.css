@@ -544,7 +544,50 @@ button.tiny {
   font-size: 13px;
 }
 
-.legend span {
+.legend-item {
+  display: block;
+}
+
+.legend-button {
+  width: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--stroke);
+  background: rgba(255, 255, 255, 0.9);
+  color: var(--ink);
+  box-shadow: none;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.legend-button:hover {
+  transform: none;
+  border-color: rgba(37, 99, 235, 0.35);
+  background: rgba(37, 99, 235, 0.08);
+}
+
+.legend-button:focus-visible {
+  outline: 2px solid rgba(37, 99, 235, 0.45);
+  outline-offset: 1px;
+}
+
+.legend-item.inactive .legend-button {
+  opacity: 0.5;
+  background: rgba(15, 23, 42, 0.03);
+}
+
+.legend-button[disabled] {
+  opacity: 0.45;
+  cursor: not-allowed;
+  border-style: dashed;
+}
+
+.legend-button span {
   display: inline-flex;
   align-items: center;
   gap: 8px;
