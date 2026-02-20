@@ -1944,11 +1944,12 @@ function buildNetwork(graph) {
         applyFilters();
         return;
       }
+      const hadSupplyFocus = state.supplyMode !== "off";
       state.selectedNodeId = null;
       state.selectedNodeType = null;
       updateSupplyUI();
       renderDetailsEmpty();
-      applyFilters();
+      if (hadSupplyFocus) applyFilters();
     });
   } else {
     state.network.setData({ nodes: state.nodesData, edges: state.edgesData });
