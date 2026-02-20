@@ -1473,43 +1473,6 @@ function formatYamlPath(pathSegments) {
   }, "");
 }
 
-async function copyYamlPath(pathLabel) {
-  if (!pathLabel) return;
-  try {
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      await navigator.clipboard.writeText(pathLabel);
-    } else {
-      const input = document.createElement("textarea");
-      input.value = pathLabel;
-      document.body.appendChild(input);
-      input.select();
-      document.execCommand("copy");
-      document.body.removeChild(input);
-    }
-    if (elements.yamlStatus) {
-      elements.yamlStatus.textContent = `Pfad kopiert: ${pathLabel}`;
-    }
-  } catch (error) {
-    if (elements.yamlStatus) {
-      elements.yamlStatus.textContent = "Pfad konnte nicht kopiert werden.";
-    }
-  }
-}
-
-function createYamlCopyButton(pathLabel) {
-  const button = document.createElement("button");
-  button.type = "button";
-  button.className = "yaml-copy";
-  button.textContent = "Pfad kopieren";
-  button.title = pathLabel;
-  button.addEventListener("click", (event) => {
-    event.preventDefault();
-    event.stopPropagation();
-    copyYamlPath(pathLabel);
-  });
-  return button;
-}
-
 function resolveYamlNodeId(value, context) {
   if (!value || typeof value !== "object") return null;
   const id = value.id;
@@ -1563,11 +1526,6 @@ function buildYamlNode(key, value, depth = 0, context = {}) {
       summary.appendChild(metaSpan);
     }
 
-    const actions = document.createElement("span");
-    actions.className = "yaml-actions";
-    actions.appendChild(createYamlCopyButton(pathLabel));
-    summary.appendChild(actions);
-
     details.appendChild(summary);
 
     const children = document.createElement("div");
@@ -1608,11 +1566,6 @@ function buildYamlNode(key, value, depth = 0, context = {}) {
   leaf.dataset.searchText = searchText;
   leaf.dataset.yamlPath = pathLabel;
 
-  const actions = document.createElement("span");
-  actions.className = "yaml-actions";
-  actions.appendChild(createYamlCopyButton(pathLabel));
-  leaf.appendChild(actions);
-
   const keySpan = document.createElement("span");
   keySpan.className = "yaml-key";
   keySpan.textContent = key;
@@ -1648,7 +1601,7 @@ function renderYamlSearchList() {
 
     const snippet = document.createElement("span");
     snippet.className = "yaml-search-item-snippet";
-    snippet.textContent = (item.textContent || "").replace("Pfad kopieren", "").trim().replace(/\s+/g, " ").slice(0, 120);
+    snippet.textContent = (item.textContent || "").trim().replace(/\s+/g, " ").slice(0, 120);
 
     button.appendChild(path);
     button.appendChild(snippet);
