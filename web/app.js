@@ -546,7 +546,7 @@ function applyFilters() {
   const criticalityInputs = elements.criticalityFilters.querySelectorAll("input");
   const entitySubtypeInputs = elements.entitySubtypeFilters.querySelectorAll("input");
   const eventSubtypeInputs = elements.eventSubtypeFilters.querySelectorAll("input");
-  const searchTerm = elements.searchInput.value.trim().toLowerCase();
+  const searchTerm = (elements.searchInput?.value || "").trim().toLowerCase();
 
   const filteredNodes = state.graph.nodes.filter((node) => {
     if (!nodeTypes.has(node.type)) return false;
@@ -1212,7 +1212,7 @@ function applyPendingUiState() {
     setConflictMode(pending.conflictMode);
   }
   if (typeof pending.search === "string") {
-    elements.searchInput.value = pending.search;
+    if (elements.searchInput) elements.searchInput.value = pending.search;
   }
   if (pending.filters) {
     applySelection(elements.nodeTypeFilters, pending.filters.nodeTypes);
@@ -2086,7 +2086,7 @@ function wireUI() {
     handleFileUpload(event.target.files[0]);
   });
   elements.exampleBtn.addEventListener("click", loadExample);
-  elements.searchInput.addEventListener("input", applyFilters);
+  if (elements.searchInput) elements.searchInput.addEventListener("input", applyFilters);
   elements.conflictMode.addEventListener("change", (event) => {
     setConflictMode(event.target.checked);
     applyFilters();
