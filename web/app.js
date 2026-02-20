@@ -1291,7 +1291,6 @@ function buildYamlNode(key, value, depth = 0, context = {}) {
     index: context.index ?? null,
     cascadeId: context.cascadeId ?? null
   };
-  const nodeId = resolveYamlNodeId(value, currentContext);
   const searchText = `${key} ${typeof value === "object" ? "" : value}`.toLowerCase();
 
   if (value && typeof value === "object") {
@@ -1302,12 +1301,6 @@ function buildYamlNode(key, value, depth = 0, context = {}) {
     const summary = document.createElement("summary");
     const meta = describeYamlValue(value);
     summary.innerHTML = `<span class="yaml-key">${key}</span>${meta ? `<span class="yaml-meta">${meta}</span>` : ""}`;
-    if (nodeId) {
-      const actions = document.createElement("span");
-      actions.className = "yaml-actions";
-      actions.innerHTML = `<button class="yaml-jump" type="button" title="Im Graph anzeigen" data-node-id="${nodeId}"><span class="yaml-jump-icon">↗</span><span>Graph</span></button>`;
-      summary.insertBefore(actions, summary.firstChild);
-    }
     details.appendChild(summary);
 
     const children = document.createElement("div");
@@ -1345,12 +1338,6 @@ function buildYamlNode(key, value, depth = 0, context = {}) {
   leaf.className = "yaml-leaf";
   leaf.innerHTML = `<span class="yaml-key">${key}</span><span class="yaml-sep">:</span><span class="yaml-value">${formatYamlScalar(value)}</span>`;
   leaf.dataset.searchText = searchText;
-  if (nodeId) {
-    const actions = document.createElement("span");
-    actions.className = "yaml-actions";
-    actions.innerHTML = `<button class="yaml-jump" type="button" title="Im Graph anzeigen" data-node-id="${nodeId}"><span class="yaml-jump-icon">↗</span><span>Graph</span></button>`;
-    leaf.insertBefore(actions, leaf.firstChild);
-  }
   return leaf;
 }
 
@@ -2075,15 +2062,6 @@ function wireUI() {
   if (elements.yamlSearch) {
     elements.yamlSearch.addEventListener("input", (event) => {
       applyYamlSearch(event.target.value);
-    });
-  }
-  if (elements.yamlTree) {
-    elements.yamlTree.addEventListener("click", (event) => {
-      const jumpButton = event.target.closest(".yaml-jump");
-      if (!jumpButton) return;
-      event.stopPropagation();
-      const nodeId = jumpButton.dataset.nodeId;
-      focusNodeFromYaml(nodeId);
     });
   }
 
