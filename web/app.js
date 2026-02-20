@@ -244,7 +244,7 @@ function addVisualStyles(graph) {
       font: {
         color: "#0b1220",
         face: "Space Grotesk",
-        size: 15
+        size: locationBadge ? 17 : 15
       },
       borderWidth: isScenario ? 2 : 1,
       title: buildTooltip(node)
@@ -284,19 +284,19 @@ function addVisualStyles(graph) {
 
 function buildTooltip(node) {
   const lines = [
-    `<strong>${node.label || node.id}</strong>`,
-    `Typ: ${node.type}`
+    String(node.label || node.id),
+    "Typ: " + node.type
   ];
   if (node.subtype) {
-    lines.push(`Subtyp: ${node.subtype}`);
+    lines.push("Subtyp: " + node.subtype);
   }
   if (node.data?.sector) {
-    lines.push(`Sektor: ${node.data.sector}`);
+    lines.push("Sektor: " + node.data.sector);
   }
   if (node.data?.location) {
-    lines.push(`Ort: ${node.data.location}`);
+    lines.push("Ort: " + node.data.location);
   }
-  return lines.join("<br>");
+  return lines.join("\n");
 }
 
 function getNodeSector(node) {
