@@ -623,7 +623,7 @@ button.tiny {
 
 .yaml-layout {
   display: grid;
-  grid-template-columns: minmax(320px, 396px) 1fr;
+  grid-template-columns: minmax(300px, 396px) 1fr minmax(280px, 340px);
   min-height: calc(100vh - 64px);
 }
 
@@ -634,6 +634,75 @@ button.tiny {
 .yaml-card {
   height: calc(100vh - 140px);
   overflow: hidden;
+}
+
+.ontology-panel {
+  padding-left: 20px;
+}
+
+.ontology-card {
+  height: calc(100vh - 140px);
+  overflow: auto;
+  align-content: start;
+}
+
+.ontology-block {
+  display: grid;
+  gap: 8px;
+}
+
+.ontology-block h3 {
+  margin: 0;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+.ontology-list,
+.ontology-stats {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.ontology-list code,
+.ontology-stat-item code {
+  font-size: 11px;
+}
+
+.ontology-stats {
+  list-style: none;
+  padding-left: 0;
+}
+
+.ontology-stat-item {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 2px 10px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.ontology-stat-label {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.ontology-stat-value {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.ontology-stat-note {
+  grid-column: 1 / -1;
+  font-size: 11px;
+  color: var(--muted);
 }
 
 .yaml-tree {

@@ -286,6 +286,45 @@
           </div>
         </div>
       </main>
+
+      <aside class="panel panel-right ontology-panel">
+        <section class="card ontology-card">
+          <h2>PDL Ontologie</h2>
+          <p class="status">Schnelle Orientierung über Klassen und Beziehungen.</p>
+
+          <div class="ontology-block">
+            <h3>Instanzen im YAML</h3>
+            <ul id="ontologyStats" class="ontology-stats"></ul>
+          </div>
+
+          <div class="ontology-block">
+            <h3>Kernklassen</h3>
+            <ul class="ontology-list">
+              <li><code>Scenario</code> mit Metadaten und Sammlungen</li>
+              <li><code>Entity</code>: manufacturer, commodity, infrastructure, service, region</li>
+              <li><code>SupplyChain</code> mit <code>stages</code> und <code>dependencies</code></li>
+              <li><code>Event</code> mit <code>trigger</code>, <code>impact</code>, <code>causes</code></li>
+              <li><code>Cascade</code> mit <code>origin</code> und <code>timeline</code></li>
+            </ul>
+          </div>
+
+          <div class="ontology-block">
+            <h3>Wichtige Relationen</h3>
+            <ul class="ontology-list">
+              <li><code>fromEntity</code> → <code>toEntity</code> (Supply Flows)</li>
+              <li><code>triggers</code> (Event betrifft Entity)</li>
+              <li><code>causes</code> (Event triggert Event)</li>
+              <li><code>originEvent</code> (Cascade Start)</li>
+              <li><code>timelineEvent</code> und <code>affects</code> (Cascade Verlauf)</li>
+            </ul>
+          </div>
+
+          <div class="ontology-block">
+            <h3>Impact-Felder</h3>
+            <ul id="ontologyImpactStats" class="ontology-stats"></ul>
+          </div>
+        </section>
+      </aside>
     </div>
   </div>
 

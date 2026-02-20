@@ -110,6 +110,8 @@ const elements = {
   yamlSearchList: document.getElementById("yamlSearchList"),
   yamlSearchPrev: document.getElementById("yamlSearchPrev"),
   yamlSearchNext: document.getElementById("yamlSearchNext"),
+  ontologyStats: document.getElementById("ontologyStats"),
+  ontologyImpactStats: document.getElementById("ontologyImpactStats"),
   yamlExpand: document.getElementById("yamlExpand"),
   yamlCollapse: document.getElementById("yamlCollapse"),
   validationStatus: document.getElementById("validationStatus"),
@@ -1729,7 +1731,77 @@ function applyYamlSearch(query) {
   }
 }
 
+function appendOntologyStat(list, label, value, note = "") {
+  const item = document.createElement("li");
+  item.className = "ontology-stat-item";
+
+  const labelEl = document.createElement("span");
+  labelEl.className = "ontology-stat-label";
+  labelEl.textContent = label;
+
+  const valueEl = document.createElement("span");
+  valueEl.className = "ontology-stat-value";
+  valueEl.textContent = String(value);
+
+  item.appendChild(labelEl);
+  item.appendChild(valueEl);
+
+  if (note) {
+    const noteEl = document.createElement("span");
+    noteEl.className = "ontology-stat-note";
+    noteEl.textContent = note;
+    item.appendChild(noteEl);
+  }
+
+  list.appendChild(item);
+}
+
+function renderOntologyOverview(data) {
+  if (!elements.ontologyStats || !elements.ontologyImpactStats) return;
+
+  elements.ontologyStats.innerHTML = "";
+  elements.ontologyImpactStats.innerHTML = "";
+
+  if (!data) {
+    appendOntologyStat(elements.ontologyStats, "Status", "Keine Datei geladen");
+    appendOntologyStat(elements.ontologyImpactStats, "Hinweis", "Lade ein YAML für Metriken");
+    return;
+  }
+
+  const entities = Array.isArray(data.entities) ? data.entities : [];
+  const chains = Array.isArray(data.supply_chains) ? data.supply_chains : [];
+  const events = Array.isArray(data.events) ? data.events : [];
+  const cascades = Array.isArray(data.cascades) ? data.cascades : [];
+
+  const entityTypes = new Set(entities.map((item) => item.type).filter(Boolean));
+  const eventTypes = new Set(events.map((item) => item.type).filter(Boolean));
+
+  const stageCount = chains.reduce((sum, chain) => sum + ((chain.stages || []).length), 0);
+  const dependencyCount = chains.reduce((sum, chain) => sum + ((chain.dependencies || []).length), 0);
+  const timelineCount = cascades.reduce((sum, cascade) => sum + ((cascade.timeline || []).length), 0);
+
+  appendOntologyStat(elements.ontologyStats, "Entities", entities.length, `${entityTypes.size} Typen`);
+  appendOntologyStat(elements.ontologyStats, "Supply Chains", chains.length, `${stageCount} Stages`);
+  appendOntologyStat(elements.ontologyStats, "Dependencies", dependencyCount);
+  appendOntologyStat(elements.ontologyStats, "Events", events.length, `${eventTypes.size} Typen`);
+  appendOntologyStat(elements.ontologyStats, "Cascades", cascades.length, `${timelineCount} Timeline-Einträge`);
+
+  const eventsWithTarget = events.filter((event) => event.trigger?.target).length;
+  const eventsWithCauses = events.filter((event) => Array.isArray(event.causes) && event.causes.length > 0).length;
+  const impactSupply = events.filter((event) => event.impact?.supply !== undefined).length;
+  const impactDemand = events.filter((event) => event.impact?.demand !== undefined).length;
+  const impactPrice = events.filter((event) => event.impact?.price !== undefined).length;
+  const impactDuration = events.filter((event) => event.impact?.duration !== undefined).length;
+
+  appendOntologyStat(elements.ontologyImpactStats, "Trigger mit Ziel", eventsWithTarget);
+  appendOntologyStat(elements.ontologyImpactStats, "Events mit Causes", eventsWithCauses);
+  appendOntologyStat(elements.ontologyImpactStats, "Impact Supply", impactSupply);
+  appendOntologyStat(elements.ontologyImpactStats, "Impact Demand", impactDemand);
+  appendOntologyStat(elements.ontologyImpactStats, "Impact Price", impactPrice);
+  appendOntologyStat(elements.ontologyImpactStats, "Impact Duration", impactDuration);
+}
 function renderYamlTree(data) {
+  renderOntologyOverview(data);
   if (!elements.yamlTree) return;
   elements.yamlTree.innerHTML = "";
   if (!data) {
@@ -2498,6 +2570,7 @@ function wireUI() {
 
   wireActionButtons();
   renderLegend();
+  renderOntologyOverview(state.raw);
 }
 
 const TUTORIAL_STEPS = [
