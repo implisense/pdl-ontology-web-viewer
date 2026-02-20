@@ -46,7 +46,10 @@ const state = {
     pending: null,
     applying: false,
     graphScale: 1,
-    zoomRaf: null
+    zoomRaf: null,
+    layoutRaf: null,
+    renderedNodeIds: new Set(),
+    renderedEdgeIds: new Set()
   }
 };
 
@@ -331,6 +334,14 @@ function getNodeCriticality(node) {
   return node.data?.criticality ?? null;
 }
 
+function setsEqual(left, right) {
+  if (left.size !== right.size) return false;
+  for (const value of left) {
+    if (!right.has(value)) return false;
+  }
+  return true;
+}
+
 function findNodeTypeInput(type) {
   const inputs = Array.from(elements.nodeTypeFilters?.querySelectorAll("input[type=checkbox]") || []);
   return inputs.find((input) => input.value === type) || null;
@@ -589,6 +600,15 @@ function scheduleApplyFilters() {
   });
 }
 
+function scheduleLayoutStabilization(iterations = 140) {
+  if (!state.network) return;
+  if (state.uiState.layoutRaf) return;
+  state.uiState.layoutRaf = requestAnimationFrame(() => {
+    state.uiState.layoutRaf = null;
+    stabilizeNetworkLayout(iterations);
+  });
+}
+
 function getLabelThreshold(nodeType) {
   if (nodeType === "scenario") return 0;
   if (nodeType === "entity" || nodeType === "event") return 0.35;
@@ -655,6 +675,13 @@ function applyFilters() {
     if (!edgeTypes.has(edge.type)) return false;
     return nodeIds.has(edge.from) && nodeIds.has(edge.to);
   });
+
+  const nextNodeIds = new Set(filteredNodes.map((node) => node.id));
+  const nextEdgeIds = new Set(filteredEdges.map((edge) => edge.id));
+  const topologyChanged =
+    !setsEqual(state.uiState.renderedNodeIds, nextNodeIds) ||
+    !setsEqual(state.uiState.renderedEdgeIds, nextEdgeIds);
+
   state.analysis.filteredNodes = filteredNodes;
   state.analysis.filteredEdges = filteredEdges;
 
@@ -714,6 +741,13 @@ function applyFilters() {
   updatePathVisibility(nodeIds, new Set(filteredEdges.map((edge) => edge.id)));
   updateStats(state.analysis.filteredNodes, state.analysis.filteredEdges);
   updateLegendState();
+
+  state.uiState.renderedNodeIds = nextNodeIds;
+  state.uiState.renderedEdgeIds = nextEdgeIds;
+  if (topologyChanged) {
+    scheduleLayoutStabilization(140);
+  }
+
   updateUrlState();
 }
 
@@ -2075,7 +2109,6 @@ function buildNetwork(graph) {
   wireFilterEvents();
   applyPendingUiState();
   applyFilters();
-  stabilizeNetworkLayout(200);
   renderLegend();
   renderDetailsEmpty();
 }
