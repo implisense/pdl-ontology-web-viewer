@@ -1,0 +1,292 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>PDL-Viewer</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://unpkg.com/vis-network@9.1.2/styles/vis-network.min.css" />
+  <link rel="stylesheet" href="styles.css" />
+  <script src="https://unpkg.com/vis-network@9.1.2/standalone/umd/vis-network.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/ajv@8/dist/ajv7.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/ajv-formats@2/dist/ajv-formats.min.js"></script>
+  <script type="module" src="app.js"></script>
+</head>
+<body>
+  <div class="topbar">
+    <div class="tabs">
+      <button id="tabGraph" class="tab active" type="button">Graph</button>
+      <button id="tabYaml" class="tab" type="button">YAML Viewer</button>
+    </div>
+    <div class="topbar-right">
+      <div id="fileLabel" class="file-label">Keine Datei geladen</div>
+      <button id="tutorialBtn" class="ghost tiny" type="button">Tutorial</button>
+      <div class="topbar-menu">
+        <button id="analysisMenuToggle" class="ghost tiny" type="button">Analyse</button>
+        <div id="analysisMenu" class="menu-panel hidden">
+          <div class="menu-header">
+            <span class="stat-title">Analyse</span>
+          </div>
+          <div class="analysis-grid">
+            <label>
+              <span>Start</span>
+              <input id="analysisStart" type="text" list="nodeOptions" placeholder="Knoten-ID oder Label" />
+            </label>
+            <label>
+              <span>Ziel</span>
+              <input id="analysisTarget" type="text" list="nodeOptions" placeholder="Knoten-ID oder Label" />
+            </label>
+          </div>
+          <datalist id="nodeOptions"></datalist>
+          <div class="graph-actions">
+            <button id="analysisFind" type="button">Pfad finden</button>
+            <button id="analysisToggle" class="ghost" type="button" disabled>Pfad hervorheben</button>
+            <button id="analysisClear" class="ghost" type="button" disabled>Zurücksetzen</button>
+          </div>
+          <p id="analysisResult" class="status">Noch keine Analyse.</p>
+          <div class="analysis-presets">
+            <span class="stat-title">Presets</span>
+            <div id="analysisPresets" class="preset-list"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="graphView" class="view active">
+    <div class="app">
+    <aside class="panel panel-left">
+      <header>
+        <p class="eyebrow">PDL-Viewer</p>
+        <h1>PDL-Viewer</h1>
+        <p class="subtitle">Interaktive Visualisierung von PDL-YAML Szenarien als Netzwerkgraph.</p>
+      </header>
+
+      <section class="card">
+        <h2>Datei laden</h2>
+        <label class="file-input">
+          <input id="fileInput" type="file" accept=".yaml,.yml" />
+          <span>YAML hochladen</span>
+        </label>
+        <button id="exampleBtn" class="ghost">Beispiel laden: s1-soja.pdl.yaml</button>
+        <p id="status" class="status">Noch keine Datei geladen.</p>
+        <div class="validation-block">
+          <p id="validationStatus" class="status">Validierung: ausstehend.</p>
+          <ul id="validationList" class="validation-list"></ul>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Filter</h2>
+        <label class="mode-toggle">
+          <input id="conflictMode" type="checkbox" />
+          Nur Konfliktkette (Events + Cascades)
+        </label>
+        <div class="focus-bar">
+          <span id="focusLabel">Pfad-Fokus: aus</span>
+          <label class="focus-toggle">
+            <input id="focusHighlight" type="checkbox" />
+            Hervorheben
+          </label>
+          <button id="focusReset" class="ghost" type="button" disabled>Zurücksetzen</button>
+        </div>
+        <div class="search">
+          <input id="searchInput" type="search" placeholder="Suche nach ID oder Label" />
+        </div>
+
+        <div class="filter-group">
+          <div class="filter-header">
+            <h3>Knotentypen</h3>
+            <div class="filter-actions">
+              <button class="tiny" data-action="select-all" data-target="nodeTypeFilters">Alle</button>
+              <button class="tiny" data-action="select-none" data-target="nodeTypeFilters">Keine</button>
+            </div>
+          </div>
+          <div id="nodeTypeFilters" class="filter-list"></div>
+        </div>
+
+        <div id="sectorFilterBlock" class="filter-group hidden">
+          <div class="filter-header">
+            <h3>Sector</h3>
+            <div class="filter-actions">
+              <button class="tiny" data-action="select-all" data-target="sectorFilters">Alle</button>
+              <button class="tiny" data-action="select-none" data-target="sectorFilters">Keine</button>
+            </div>
+          </div>
+          <div id="sectorFilters" class="filter-list"></div>
+        </div>
+
+        <div id="locationFilterBlock" class="filter-group hidden">
+          <div class="filter-header">
+            <h3>Location</h3>
+            <div class="filter-actions">
+              <button class="tiny" data-action="select-all" data-target="locationFilters">Alle</button>
+              <button class="tiny" data-action="select-none" data-target="locationFilters">Keine</button>
+            </div>
+          </div>
+          <div id="locationFilters" class="filter-list"></div>
+        </div>
+
+        <div id="criticalityFilterBlock" class="filter-group hidden">
+          <div class="filter-header">
+            <h3>Criticality</h3>
+            <div class="filter-actions">
+              <button class="tiny" data-action="select-all" data-target="criticalityFilters">Alle</button>
+              <button class="tiny" data-action="select-none" data-target="criticalityFilters">Keine</button>
+            </div>
+          </div>
+          <div id="criticalityFilters" class="filter-list"></div>
+        </div>
+
+        <div class="filter-group">
+          <div class="filter-header">
+            <h3>Kantentypen</h3>
+            <div class="filter-actions">
+              <button class="tiny" data-action="select-all" data-target="edgeTypeFilters">Alle</button>
+              <button class="tiny" data-action="select-none" data-target="edgeTypeFilters">Keine</button>
+            </div>
+          </div>
+          <div id="edgeTypeFilters" class="filter-list"></div>
+        </div>
+
+        <div id="entitySubtypeBlock" class="filter-group hidden">
+          <div class="filter-header">
+            <h3>Entity-Subtypen</h3>
+            <div class="filter-actions">
+              <button class="tiny" data-action="select-all" data-target="entitySubtypeFilters">Alle</button>
+              <button class="tiny" data-action="select-none" data-target="entitySubtypeFilters">Keine</button>
+            </div>
+          </div>
+          <div id="entitySubtypeFilters" class="filter-list"></div>
+        </div>
+
+        <div id="eventSubtypeBlock" class="filter-group hidden">
+          <div class="filter-header">
+            <h3>Event-Subtypen</h3>
+            <div class="filter-actions">
+              <button class="tiny" data-action="select-all" data-target="eventSubtypeFilters">Alle</button>
+              <button class="tiny" data-action="select-none" data-target="eventSubtypeFilters">Keine</button>
+            </div>
+          </div>
+          <div id="eventSubtypeFilters" class="filter-list"></div>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Graph</h2>
+        <div class="stats" id="stats"></div>
+        <div class="graph-actions">
+          <button id="fitBtn">Ansicht zentrieren</button>
+          <button id="stabilizeBtn" class="ghost">Layout neu berechnen</button>
+          <button id="exportJson" class="ghost" type="button">Export JSON</button>
+          <button id="exportPng" class="ghost" type="button">Export PNG</button>
+        </div>
+        <p id="exportStatus" class="status"></p>
+      </section>
+
+    </aside>
+
+    <main class="canvas">
+      <div id="graph" aria-label="Graph Visualisierung"></div>
+      <div class="hint">
+        <p>Zoom mit Mausrad · Knoten ziehen · Doppelklick für Fokus</p>
+      </div>
+    </main>
+
+    <aside class="panel panel-right">
+      <section class="card">
+        <h2>Details</h2>
+        <div class="details-header">
+          <div>
+            <p id="detailsType" class="details-type">—</p>
+            <h3 id="detailsTitle" class="details-title">Klick auf einen Knoten oder eine Kante</h3>
+          </div>
+          <button id="detailsToggle" class="tiny ghost" type="button">JSON</button>
+        </div>
+        <div id="detailsContent" class="details-content">
+          <p class="details-empty">Wähle ein Element im Graphen aus, um Details zu sehen.</p>
+        </div>
+        <pre id="detailsRaw" class="details hidden"></pre>
+      </section>
+
+      <section class="card">
+        <h2>Supply-Chain Fokus</h2>
+        <p id="supplyStatus" class="status">Kein Entity ausgewählt.</p>
+        <label class="focus-toggle">
+          <input id="supplyDim" type="checkbox" checked />
+          Rest abdunkeln
+        </label>
+        <div class="supply-actions">
+          <button class="tiny" data-supply="upstream" type="button">Upstream</button>
+          <button class="tiny" data-supply="downstream" type="button">Downstream</button>
+          <button class="tiny" data-supply="both" type="button">Beides</button>
+          <button class="tiny ghost" data-supply="off" type="button">Aus</button>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Legende</h2>
+        <ul class="legend" id="legend"></ul>
+      </section>
+    </aside>
+    </div>
+  </div>
+
+  <div id="yamlView" class="view">
+    <div class="yaml-layout">
+      <aside class="panel panel-left">
+        <header>
+          <p class="eyebrow">PDL YAML</p>
+          <h1>YAML Viewer</h1>
+          <p class="subtitle">Ausklappbare Strukturansicht der geladenen Datei.</p>
+        </header>
+
+        <section class="card">
+          <h2>Ansicht</h2>
+          <div class="search">
+            <input id="yamlSearch" type="search" placeholder="Suche nach Schlüssel oder Wert" />
+          </div>
+          <p id="yamlStatus" class="status">Noch keine Datei geladen.</p>
+          <div class="graph-actions">
+            <button id="yamlExpand">Alles aufklappen</button>
+            <button id="yamlCollapse" class="ghost">Alles zuklappen</button>
+          </div>
+        </section>
+      </aside>
+
+      <main class="yaml-canvas">
+        <div class="card yaml-card">
+          <div id="yamlTree" class="yaml-tree">
+            <p class="details-empty">Noch keine Datei geladen.</p>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+
+<div id="tutorialOverlay" class="tutorial-overlay hidden">
+  <div class="tutorial-modal">
+    <div class="tutorial-header">
+      <h2 id="tutorialTitle">PDL Simulation verstehen</h2>
+      <button id="tutorialClose" class="tutorial-close" type="button">&times;</button>
+    </div>
+    <div class="tutorial-progress">
+      <span class="tutorial-dot"></span>
+      <span class="tutorial-dot"></span>
+      <span class="tutorial-dot"></span>
+      <span class="tutorial-dot"></span>
+      <span class="tutorial-dot"></span>
+      <span class="tutorial-dot"></span>
+    </div>
+    <div id="tutorialBody" class="tutorial-body"></div>
+    <div class="tutorial-footer">
+      <button id="tutorialPrev" class="ghost" type="button">Zur&uuml;ck</button>
+      <span id="tutorialStep" class="tutorial-step-label">1 / 6</span>
+      <button id="tutorialNext" type="button">Weiter</button>
+    </div>
+  </div>
+</div>
+</body>
+</html>

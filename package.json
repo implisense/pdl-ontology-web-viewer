@@ -1,7 +1,7 @@
 {
-  "name": "provider-pdl",
+  "name": "pdl-viewer",
   "version": "1.0.0",
-  "description": "PROVIDER Domain Language (PDL) - A YAML-based DSL for supply chain disruption scenarios",
+  "description": "PDL-Viewer - Interaktive Visualisierung von PDL-Szenarien",
   "type": "module",
   "main": "src/index.js",
   "scripts": {
