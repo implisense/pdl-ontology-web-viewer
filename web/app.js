@@ -63,6 +63,7 @@ const UNKNOWN_VALUE = "ohne Angabe";
 const colors = {
   entity: { background: "#16a34a", border: "#14532d" },
   supply_chain: { background: "#f59e0b", border: "#92400e" },
+  substitution: { background: "#2563eb", border: "#1e3a8a" },
   event: { background: "#dc2626", border: "#7f1d1d" },
   cascade: { background: "#7c3aed", border: "#4c1d95" },
   timeline_entry: { background: "#0ea5e9", border: "#0c4a6e" }
@@ -72,6 +73,13 @@ const edgeColors = {
   contains: "#64748b",
   supply_flow: "#0f766e",
   dependency: "#f97316",
+  dependency_substitution: "#3b82f6",
+  substitution_ref: "#1d4ed8",
+  substitution_for: "#2563eb",
+  substitution_by: "#1e40af",
+  activation: "#0f766e",
+  side_effect: "#f43f5e",
+  dependency_overlap: "#64748b",
   triggers: "#ef4444",
   causes: "#9333ea",
   cascade_origin: "#4f46e5",
@@ -205,7 +213,8 @@ const EVENT_BADGE_BY_SUBTYPE = {
   regulatory: "⚖️",
   natural_disaster: "🌪️",
   geopolitical: "🛡️",
-  pandemic: "🦠"
+  pandemic: "🦠",
+  cyber_attack: "💻"
 };
 
 function getEventBadge(subtype) {
@@ -304,7 +313,7 @@ function addVisualStyles(graph) {
       arrows: "to",
       color: { color, highlight: color },
       width: edge.type === "supply_flow" ? 2 : 1,
-      dashes: edge.type === "dependency",
+      dashes: edge.type === "dependency" || edge.type === "dependency_overlap",
       font: {
         color: "#0b1220",
         face: "Space Grotesk",
@@ -334,6 +343,11 @@ function buildTooltip(node) {
   }
   if (node.data?.location) {
     lines.push("Ort: " + node.data.location);
+  }
+  if (node.type === "substitution") {
+    if (node.data?.from) lines.push("Von: " + node.data.from);
+    if (node.data?.to) lines.push("Nach: " + node.data.to);
+    if (node.data?.coverage !== undefined) lines.push("Coverage: " + node.data.coverage);
   }
   return lines.join("\n");
 }
@@ -628,6 +642,7 @@ function scheduleLayoutStabilization(iterations = 140) {
 function getLabelThreshold(nodeType) {
   if (nodeType === "scenario") return 0;
   if (nodeType === "entity" || nodeType === "event") return 0.35;
+  if (nodeType === "substitution") return 0.45;
   if (nodeType === "cascade" || nodeType === "supply_chain") return 0.55;
   return 0.75;
 }
@@ -656,10 +671,11 @@ function getTopConnectedNodeIds(nodes, edges, limit = 3) {
   const typeRank = {
     entity: 0,
     event: 1,
-    cascade: 2,
-    supply_chain: 3,
-    timeline_entry: 4,
-    scenario: 5
+    substitution: 2,
+    cascade: 3,
+    supply_chain: 4,
+    timeline_entry: 5,
+    scenario: 6
   };
 
   const ranked = nodes
@@ -1249,10 +1265,23 @@ async function ensureValidator() {
   return state.validation.validator;
 }
 
+function extractEventIdsFromTrigger(triggerExpression) {
+  if (!triggerExpression || typeof triggerExpression !== "string") return [];
+  const ids = new Set();
+  const pattern = /\b([a-z][a-z0-9_]*)\.active\b/g;
+  let match = pattern.exec(triggerExpression);
+  while (match) {
+    ids.add(match[1]);
+    match = pattern.exec(triggerExpression);
+  }
+  return Array.from(ids);
+}
+
 function checkReferences(pdl) {
   const issues = [];
   const entityIds = new Set((pdl.entities || []).map((entity) => entity.id));
   const eventIds = new Set((pdl.events || []).map((event) => event.id));
+  const substitutionIds = new Set((pdl.substitutions || []).map((item) => item.id));
 
   (pdl.supply_chains || []).forEach((chain) => {
     (chain.stages || []).forEach((stage, idx) => {
@@ -1273,6 +1302,13 @@ function checkReferences(pdl) {
           edgeId: `edge:${chain.id}-dep-${idx}`
         });
       }
+      if (dep.substitution_ref && !substitutionIds.has(dep.substitution_ref)) {
+        issues.push({
+          message: `Supply-Chain ${chain.id}: Dependency ${idx + 1} hat unbekannte substitution_ref ${dep.substitution_ref}.`,
+          nodeId: `chain:${chain.id}`,
+          edgeId: `edge:${chain.id}-dep-sub-${idx}`
+        });
+      }
     });
   });
 
@@ -1290,6 +1326,62 @@ function checkReferences(pdl) {
           message: `Event ${event.id}: Cause ${causeId} existiert nicht.`,
           nodeId: `event:${event.id}`,
           edgeId: `edge:${event.id}-causes-${idx}`
+        });
+      }
+    });
+    if (event.substitution_ref && !substitutionIds.has(event.substitution_ref)) {
+      issues.push({
+        message: `Event ${event.id}: substitution_ref ${event.substitution_ref} existiert nicht.`,
+        nodeId: `event:${event.id}`,
+        edgeId: `edge:${event.id}-substitution-ref`
+      });
+    }
+  });
+
+  (pdl.substitutions || []).forEach((substitution) => {
+    if (substitution.from && !entityIds.has(substitution.from)) {
+      issues.push({
+        message: `Substitution ${substitution.id}: from ${substitution.from} existiert nicht.`,
+        nodeId: `substitution:${substitution.id}`,
+        edgeId: `edge:${substitution.id}-for`
+      });
+    }
+
+    if (substitution.to && !entityIds.has(substitution.to)) {
+      issues.push({
+        message: `Substitution ${substitution.id}: to ${substitution.to} existiert nicht.`,
+        nodeId: `substitution:${substitution.id}`,
+        edgeId: `edge:${substitution.id}-by`
+      });
+    }
+
+    const triggerEvents = extractEventIdsFromTrigger(substitution.activation?.trigger);
+    triggerEvents.forEach((eventId, idx) => {
+      if (!eventIds.has(eventId)) {
+        issues.push({
+          message: `Substitution ${substitution.id}: activation.trigger referenziert unbekanntes Event ${eventId}.`,
+          nodeId: `substitution:${substitution.id}`,
+          edgeId: `edge:${substitution.id}-activation-${idx}`
+        });
+      }
+    });
+
+    (substitution.side_effects || []).forEach((sideEffect, idx) => {
+      if (sideEffect.target && !entityIds.has(sideEffect.target)) {
+        issues.push({
+          message: `Substitution ${substitution.id}: side_effect target ${sideEffect.target} existiert nicht.`,
+          nodeId: `substitution:${substitution.id}`,
+          edgeId: `edge:${substitution.id}-side-effect-${idx}`
+        });
+      }
+    });
+
+    (substitution.dependency_overlap || []).forEach((entityId, idx) => {
+      if (!entityIds.has(entityId)) {
+        issues.push({
+          message: `Substitution ${substitution.id}: dependency_overlap ${entityId} existiert nicht.`,
+          nodeId: `substitution:${substitution.id}`,
+          edgeId: `edge:${substitution.id}-overlap-${idx}`
         });
       }
     });
@@ -1326,7 +1418,6 @@ function checkReferences(pdl) {
 
   return issues;
 }
-
 async function validatePdl(pdl) {
   const errors = [];
   const warnings = [];
@@ -1559,6 +1650,7 @@ function resolveYamlNodeId(value, context) {
   if (id && context.rootKey === "events") return `event:${id}`;
   if (id && context.rootKey === "cascades") return `cascade:${id}`;
   if (id && context.rootKey === "supply_chains") return `chain:${id}`;
+  if (id && context.rootKey === "substitutions") return `substitution:${id}`;
   if (
     context.rootKey === "cascades" &&
     context.parentKey === "timeline" &&
@@ -1848,10 +1940,12 @@ function renderOntologyOverview(data) {
   const entities = Array.isArray(data.entities) ? data.entities : [];
   const chains = Array.isArray(data.supply_chains) ? data.supply_chains : [];
   const events = Array.isArray(data.events) ? data.events : [];
+  const substitutions = Array.isArray(data.substitutions) ? data.substitutions : [];
   const cascades = Array.isArray(data.cascades) ? data.cascades : [];
 
   const entityTypes = new Set(entities.map((item) => item.type).filter(Boolean));
   const eventTypes = new Set(events.map((item) => item.type).filter(Boolean));
+  const substitutionTypes = new Set(substitutions.map((item) => item.type).filter(Boolean));
 
   const stageCount = chains.reduce((sum, chain) => sum + ((chain.stages || []).length), 0);
   const dependencyCount = chains.reduce((sum, chain) => sum + ((chain.dependencies || []).length), 0);
@@ -1861,21 +1955,33 @@ function renderOntologyOverview(data) {
   appendOntologyStat(elements.ontologyStats, "Supply Chains", chains.length, `${stageCount} Stages`);
   appendOntologyStat(elements.ontologyStats, "Dependencies", dependencyCount);
   appendOntologyStat(elements.ontologyStats, "Events", events.length, `${eventTypes.size} Typen`);
+  appendOntologyStat(elements.ontologyStats, "Substitutions", substitutions.length, `${substitutionTypes.size} Typen`);
   appendOntologyStat(elements.ontologyStats, "Cascades", cascades.length, `${timelineCount} Timeline-Einträge`);
 
   const eventsWithTarget = events.filter((event) => event.trigger?.target).length;
   const eventsWithCauses = events.filter((event) => Array.isArray(event.causes) && event.causes.length > 0).length;
+  const eventsWithSubRef = events.filter((event) => event.substitution_ref).length;
   const impactSupply = events.filter((event) => event.impact?.supply !== undefined).length;
   const impactDemand = events.filter((event) => event.impact?.demand !== undefined).length;
   const impactPrice = events.filter((event) => event.impact?.price !== undefined).length;
   const impactDuration = events.filter((event) => event.impact?.duration !== undefined).length;
+  const substitutionsWithActivation = substitutions.filter((item) => item.activation?.trigger).length;
+  const substitutionsWithOverlap = substitutions.filter((item) => (item.dependency_overlap || []).length > 0).length;
+  const sideEffectCount = substitutions.reduce(
+    (sum, item) => sum + ((item.side_effects || []).length),
+    0
+  );
 
   appendOntologyStat(elements.ontologyImpactStats, "Trigger mit Ziel", eventsWithTarget);
   appendOntologyStat(elements.ontologyImpactStats, "Events mit Causes", eventsWithCauses);
+  appendOntologyStat(elements.ontologyImpactStats, "Events mit Sub-Ref", eventsWithSubRef);
   appendOntologyStat(elements.ontologyImpactStats, "Impact Supply", impactSupply);
   appendOntologyStat(elements.ontologyImpactStats, "Impact Demand", impactDemand);
   appendOntologyStat(elements.ontologyImpactStats, "Impact Price", impactPrice);
   appendOntologyStat(elements.ontologyImpactStats, "Impact Duration", impactDuration);
+  appendOntologyStat(elements.ontologyImpactStats, "Substitution Trigger", substitutionsWithActivation);
+  appendOntologyStat(elements.ontologyImpactStats, "Dependency Overlap", substitutionsWithOverlap);
+  appendOntologyStat(elements.ontologyImpactStats, "Side Effects", sideEffectCount);
 }
 function renderYamlTree(data) {
   renderOntologyOverview(data);
@@ -2141,6 +2247,17 @@ function renderNodeDetails(node) {
     ["Criticality", getNodeCriticality(node)],
     ["Vulnerability", node.data?.vulnerability]
   ];
+
+  if (node.type === "substitution") {
+    rows.push(
+      ["From", node.data?.from],
+      ["To", node.data?.to],
+      ["Coverage", node.data?.coverage],
+      ["Ramp Up", node.data?.ramp_up],
+      ["Duration Max", node.data?.duration_max],
+      ["Reversible", node.data?.reversible]
+    );
+  }
 
   const impactRaw = node.data?.impact ?? null;
   const impactParsed = node.data?.impact_parsed ?? null;

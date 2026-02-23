@@ -57,7 +57,9 @@ const DEPENDENCY_TYPE_TO_CLASS = {
   energy: 'pdl:DependencyType_energy',
   input: 'pdl:DependencyType_input',
   logistics: 'pdl:DependencyType_logistics',
-  data: 'pdl:DependencyType_data'
+  data: 'pdl:DependencyType_data',
+  substitution: 'pdl:DependencyType_substitution',
+  demand: 'pdl:DependencyType_demand'
 };
 
 /**
@@ -104,6 +106,33 @@ function toEntityClassName(type) {
  */
 function toEventClassName(type) {
   return type.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join('');
+}
+
+function buildSubstitutionTypeRef(type) {
+  if (!type) return null;
+  return 'pdl:SubstitutionType_' + type;
+}
+
+function buildSubstitutionDirectionRef(direction) {
+  if (!direction) return 'pdl:SubstitutionDirection_supply';
+  return 'pdl:SubstitutionDirection_' + direction;
+}
+
+function buildSideEffectTypeRef(type) {
+  if (!type) return null;
+  return 'pdl:SideEffectType_' + type;
+}
+
+function extractEventIdsFromTrigger(triggerExpression) {
+  if (!triggerExpression || typeof triggerExpression !== 'string') return [];
+  const ids = new Set();
+  const pattern = /\b([a-z][a-z0-9_]*)\.active\b/g;
+  let match = pattern.exec(triggerExpression);
+  while (match) {
+    ids.add(match[1]);
+    match = pattern.exec(triggerExpression);
+  }
+  return Array.from(ids);
 }
 
 /**
@@ -207,6 +236,10 @@ function convertToTurtle(pdl, options = {}) {
         lines.push(`    pdl:vulnerability "${entity.vulnerability}"^^xsd:decimal ;`);
       }
 
+      if (entity.substitution_potential !== undefined) {
+        lines.push(`    pdl:substitutionPotential "${entity.substitution_potential}"^^xsd:decimal ;`);
+      }
+
       // Link to scenario
       if (pdl.scenario) {
         lines.push(`    pdl:partOfScenario pdlr:scenario_${toIriLocalName(pdl.scenario.id)} ;`);
@@ -289,6 +322,10 @@ function convertToTurtle(pdl, options = {}) {
             lines.push(`    pdl:criticality pdl:Criticality_${dep.criticality} ;`);
           }
 
+          if (dep.substitution_ref) {
+            lines.push(`    pdl:substitutionRef pdlr:substitution_${toIriLocalName(dep.substitution_ref)} ;`);
+          }
+
           lines.push(`    pdl:belongsToChain ${chainUri} .`);
           lines.push('');
 
@@ -360,6 +397,10 @@ function convertToTurtle(pdl, options = {}) {
         lines.push(`    dcterms:source "${escapeTurtleString(event.reference)}" ;`);
       }
 
+      if (event.substitution_ref) {
+        lines.push(`    pdl:substitutionRef pdlr:substitution_${toIriLocalName(event.substitution_ref)} ;`);
+      }
+
       // Link to scenario
       if (pdl.scenario) {
         lines.push(`    pdl:partOfScenario pdlr:scenario_${toIriLocalName(pdl.scenario.id)} ;`);
@@ -382,6 +423,131 @@ function convertToTurtle(pdl, options = {}) {
     lines.push('');
   }
 
+
+  // Substitutions
+  if (pdl.substitutions && pdl.substitutions.length > 0) {
+    lines.push('# =============================================================================');
+    lines.push('# Substitutions');
+    lines.push('# =============================================================================');
+    lines.push('');
+
+    for (const substitution of pdl.substitutions) {
+      const substitutionUri = `pdlr:substitution_${toIriLocalName(substitution.id)}`;
+      const substitutionTypeRef = buildSubstitutionTypeRef(substitution.type);
+      const directionRef = buildSubstitutionDirectionRef(substitution.direction);
+      const activationUri = substitution.activation
+        ? `pdlr:activation_${toIriLocalName(substitution.id)}`
+        : null;
+
+      lines.push(`${substitutionUri} a pdl:Substitution ;`);
+      lines.push(`    dcterms:identifier "${escapeTurtleString(substitution.id)}" ;`);
+
+      if (substitution.from) {
+        lines.push(`    pdl:substitutionFor pdlr:entity_${toIriLocalName(substitution.from)} ;`);
+      }
+      if (substitution.to) {
+        lines.push(`    pdl:substitutionBy pdlr:entity_${toIriLocalName(substitution.to)} ;`);
+      }
+      if (substitutionTypeRef) {
+        lines.push(`    pdl:substitutionTypeRef ${substitutionTypeRef} ;`);
+      }
+      if (directionRef) {
+        lines.push(`    pdl:substitutionDirectionRef ${directionRef} ;`);
+      }
+      if (substitution.coverage !== undefined) {
+        lines.push(`    pdl:coverage "${substitution.coverage}"^^xsd:decimal ;`);
+      }
+      if (substitution.quality_delta !== undefined) {
+        lines.push(`    pdl:qualityDelta "${substitution.quality_delta}"^^xsd:decimal ;`);
+      }
+      if (substitution.cost_delta !== undefined) {
+        lines.push(`    pdl:costDelta "${substitution.cost_delta}"^^xsd:decimal ;`);
+      }
+      if (substitution.ramp_up) {
+        lines.push(`    pdl:rampUp "${escapeTurtleString(substitution.ramp_up)}" ;`);
+      }
+      if (substitution.duration_max) {
+        lines.push(`    pdl:durationMax "${escapeTurtleString(substitution.duration_max)}" ;`);
+      }
+      if (substitution.reversible !== undefined) {
+        lines.push(`    pdl:reversible "${substitution.reversible}"^^xsd:boolean ;`);
+      }
+      if (activationUri) {
+        lines.push(`    pdl:hasActivationCondition ${activationUri} ;`);
+      }
+
+      (substitution.side_effects || []).forEach((_, idx) => {
+        lines.push(`    pdl:hasSideEffect pdlr:sideeffect_${toIriLocalName(substitution.id)}_${idx + 1} ;`);
+      });
+
+      (substitution.dependency_overlap || []).forEach((entityId) => {
+        lines.push(`    pdl:hasDependencyOverlap pdlr:entity_${toIriLocalName(entityId)} ;`);
+      });
+
+      if (substitution.reference) {
+        lines.push(`    dcterms:source "${escapeTurtleString(substitution.reference)}" ;`);
+      }
+
+      if (pdl.scenario) {
+        lines.push(`    pdl:partOfScenario pdlr:scenario_${toIriLocalName(pdl.scenario.id)} ;`);
+      }
+
+      const lastLine = lines.pop();
+      lines.push(lastLine.replace(/ ;$/, ' .'));
+      lines.push('');
+
+      if (activationUri) {
+        lines.push(`${activationUri} a pdl:ActivationCondition ;`);
+
+        if (substitution.activation.trigger) {
+          lines.push(`    pdl:activationTrigger "${escapeTurtleString(substitution.activation.trigger)}" ;`);
+
+          const activationEvents = extractEventIdsFromTrigger(substitution.activation.trigger);
+          activationEvents.forEach((eventId) => {
+            lines.push(`    pdl:activationEvent pdlr:event_${toIriLocalName(eventId)} ;`);
+          });
+        }
+
+        if (substitution.activation.threshold?.price_increase !== undefined) {
+          lines.push(`    pdl:activationThresholdPriceIncrease "${substitution.activation.threshold.price_increase}"^^xsd:decimal ;`);
+        }
+        if (substitution.activation.threshold?.supply_drop !== undefined) {
+          lines.push(`    pdl:activationThresholdSupplyDrop "${substitution.activation.threshold.supply_drop}"^^xsd:decimal ;`);
+        }
+        if (substitution.activation.threshold?.duration_min) {
+          lines.push(`    pdl:activationThresholdDurationMin "${escapeTurtleString(substitution.activation.threshold.duration_min)}" ;`);
+        }
+
+        const lastActivationLine = lines.pop();
+        lines.push(lastActivationLine.replace(/ ;$/, ' .'));
+        lines.push('');
+      }
+
+      (substitution.side_effects || []).forEach((effect, idx) => {
+        const effectUri = `pdlr:sideeffect_${toIriLocalName(substitution.id)}_${idx + 1}`;
+        const effectTypeRef = buildSideEffectTypeRef(effect.type);
+
+        lines.push(`${effectUri} a pdl:SubstitutionSideEffect ;`);
+
+        if (effectTypeRef) {
+          lines.push(`    pdl:sideEffectTypeRef ${effectTypeRef} ;`);
+        }
+        if (effect.target) {
+          lines.push(`    pdl:sideEffectTarget pdlr:entity_${toIriLocalName(effect.target)} ;`);
+        }
+        if (effect.magnitude !== undefined) {
+          lines.push(`    pdl:sideEffectMagnitude "${effect.magnitude}"^^xsd:decimal ;`);
+        }
+        if (effect.description) {
+          lines.push(`    rdfs:comment "${escapeTurtleString(effect.description)}" ;`);
+        }
+
+        const lastEffectLine = lines.pop();
+        lines.push(lastEffectLine.replace(/ ;$/, ' .'));
+        lines.push('');
+      });
+    }
+  }
   // Cascades
   if (pdl.cascades && pdl.cascades.length > 0) {
     lines.push('# =============================================================================');
@@ -598,6 +764,10 @@ function convertToTurtle(pdl, options = {}) {
     lines.push('    rdfs:label "Logistics Dependency"@en .');
     lines.push('pdl:DependencyType_data a pdl:DependencyType ;');
     lines.push('    rdfs:label "Data Dependency"@en .');
+    lines.push('pdl:DependencyType_substitution a pdl:DependencyType ;');
+    lines.push('    rdfs:label "Substitution Dependency"@en .');
+    lines.push('pdl:DependencyType_demand a pdl:DependencyType ;');
+    lines.push('    rdfs:label "Demand Dependency"@en .');
   }
 
   lines.push('');

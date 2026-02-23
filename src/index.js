@@ -61,6 +61,7 @@ try {
       }
       console.log(`  Entities: ${metadata.entityCount}`);
       console.log(`  Events: ${metadata.eventCount}`);
+      console.log(`  Substitutions: ${metadata.substitutionCount || 0}`);
       console.log(`  Cascades: ${metadata.cascadeCount}`);
       if (metadata.description) {
         console.log(`  Description: ${metadata.description}`);
@@ -78,6 +79,7 @@ try {
       console.log(`  Nodes: ${scenario.nodes.length}`);
       console.log(`  Edges: ${scenario.edges.length}`);
       console.log(`  Events: ${scenario.events.length}`);
+      console.log(`  Substitutions: ${scenario.substitutions?.length || 0}`);
       console.log(`  Cascades: ${scenario.cascades.length}`);
       console.log('');
       console.log('Scenario ready for simulation.');

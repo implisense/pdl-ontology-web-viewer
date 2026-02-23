@@ -94,6 +94,7 @@ function convertPdlToSimulation(pdl) {
     edges: [],
 
     // Simulation parameters
+    substitutions: [],
     events: [],
     cascades: [],
 
@@ -153,6 +154,7 @@ function convertPdlToSimulation(pdl) {
             type: 'dependency',
             dependency_type: dep.type,
             criticality: dep.criticality,
+            substitution_ref: dep.substitution_ref,
             weight: dep.criticality === 'high' ? 1.0 : dep.criticality === 'medium' ? 0.6 : 0.3
           });
         });
@@ -177,9 +179,39 @@ function convertPdlToSimulation(pdl) {
           duration: parseDuration(event.impact?.duration) || 30
         },
         causes: event.causes || [],
+        substitution_ref: event.substitution_ref,
         reference: event.reference
       };
       simulation.events.push(simEvent);
+    }
+  }
+
+  // Convert substitutions
+  if (pdl.substitutions) {
+    for (const substitution of pdl.substitutions) {
+      const simSubstitution = {
+        id: substitution.id,
+        from: substitution.from,
+        to: substitution.to,
+        type: substitution.type,
+        direction: substitution.direction || 'supply',
+        coverage: substitution.coverage || 0,
+        quality_delta: substitution.quality_delta || 0,
+        cost_delta: substitution.cost_delta || 0,
+        ramp_up: substitution.ramp_up,
+        ramp_up_days: parseDuration(substitution.ramp_up) || 0,
+        duration_max: substitution.duration_max,
+        duration_max_days: parseDuration(substitution.duration_max),
+        reversible: substitution.reversible,
+        activation: {
+          trigger: substitution.activation?.trigger,
+          threshold: substitution.activation?.threshold || null
+        },
+        side_effects: substitution.side_effects || [],
+        dependency_overlap: substitution.dependency_overlap || [],
+        reference: substitution.reference
+      };
+      simulation.substitutions.push(simSubstitution);
     }
   }
 
@@ -273,6 +305,7 @@ export function getScenarioMetadata(filePath) {
       description: pdl.scenario?.description,
       entityCount: pdl.entities?.length || 0,
       eventCount: pdl.events?.length || 0,
+      substitutionCount: pdl.substitutions?.length || 0,
       cascadeCount: pdl.cascades?.length || 0,
       format: 'pdl',
       pdl_version: pdl.pdl_version
@@ -290,6 +323,7 @@ export function getScenarioMetadata(filePath) {
       description: data.description,
       entityCount: data.nodes?.length || 0,
       eventCount: data.events?.length || 0,
+      substitutionCount: data.substitutions?.length || 0,
       cascadeCount: data.cascades?.length || 0,
       format: 'json'
     };

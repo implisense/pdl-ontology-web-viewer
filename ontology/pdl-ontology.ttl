@@ -26,14 +26,16 @@
 # =============================================================================
 
 <https://provider-project.org/ontology/pdl> a owl:Ontology ;
-    owl:versionInfo "1.0" ;
+    owl:versionInfo "1.1" ;
     dcterms:title "PROVIDER Domain Language (PDL) Ontology"@en ;
-    dcterms:description "A semantic model for supply chain disruption scenarios. PDL extends the CoyPu ontology to enable modeling of entities, supply chains, disruption events, and cascade effects for simulation and analysis."@en ;
+    dcterms:description "A semantic model for supply chain disruption scenarios. PDL extends the CoyPu ontology to enable modeling of entities, supply chains, disruption events, cascade effects, and substitution mechanisms for simulation and analysis."@en ;
     dcterms:creator "PROVIDER Project" ;
     dcterms:created "2026-02-04"^^xsd:date ;
+    dcterms:modified "2026-02-23"^^xsd:date ;
     dcterms:license <https://creativecommons.org/licenses/by/4.0/> ;
     owl:imports <https://schema.coypu.org/global/2.3> ;
-    rdfs:seeAlso <https://schema.coypu.org/global/2.3> .
+    rdfs:seeAlso <https://schema.coypu.org/global/2.3> ;
+    skos:changeNote "v1.1: Added Substitution module (classes, properties, enumerations) derived from empirical analysis of 9 PROVIDER supply chain scenarios."@en .
 
 
 # =============================================================================
@@ -252,6 +254,128 @@ pdl:DependencyType_logistics a pdl:DependencyType ;
 pdl:DependencyType_data a pdl:DependencyType ;
     rdfs:label "Data Dependency"@en ;
     rdfs:comment "Dependency on data services or IT infrastructure."@en .
+
+pdl:DependencyType_substitution a pdl:DependencyType ;
+    rdfs:label "Substitution Dependency"@en ;
+    rdfs:comment "Dependency representing a substitution relationship: the source can replace the target under defined conditions."@en .
+
+pdl:DependencyType_demand a pdl:DependencyType ;
+    rdfs:label "Demand Dependency"@en ;
+    rdfs:comment "Dependency representing a demand-side relationship (e.g., consumer pulls from retailer)."@en .
+
+
+# -----------------------------------------------------------------------------
+# 1.7 Substitution Classes (PDL v1.1 Extension)
+# -----------------------------------------------------------------------------
+
+pdl:Substitution a owl:Class ;
+    rdfs:label "Substitution"@en ;
+    rdfs:comment "A formally modeled substitution option in a supply chain. Specifies what replaces what, under which conditions, with what coverage and side effects."@en ;
+    skos:definition "A Substitution captures the transition from an original supply source (entity, route, product, or technology) to an alternative, including quantitative parameters and activation conditions. Derived from empirical analysis of 9 PROVIDER disruption scenarios."@en ;
+    skos:note "Substitutions are the primary resilience mechanism in supply chains. They are often partial (coverage < 1.0), delayed (ramp_up > 0), and may introduce new risks (side effects, dependency_overlap)."@en .
+
+pdl:SubstitutionType a owl:Class ;
+    rdfs:label "Substitution Type"@en ;
+    rdfs:comment "Enumeration of substitution mechanism categories identified across PROVIDER scenarios."@en .
+
+pdl:SubstitutionType_product a pdl:SubstitutionType ;
+    rdfs:label "Product Substitution"@en ;
+    rdfs:comment "Replacing one product/commodity with a functionally equivalent alternative (e.g., rapeseed meal for soy meal, ampicillin for amoxicillin)."@en ;
+    skos:example "S1 Soja: Rapsschrot statt Sojaschrot; S3 Pharma: Ampicillin statt Amoxicillin"@de .
+
+pdl:SubstitutionType_supplier a pdl:SubstitutionType ;
+    rdfs:label "Supplier Substitution"@en ;
+    rdfs:comment "Replacing one supplier with an alternative supplier for the same product. Risk of correlated_risk if suppliers share upstream dependencies."@en ;
+    skos:example "S1: Argentinien/USA statt Brasilien; S2: Samsung/UMC statt TSMC; S7: Lynas statt China"@de .
+
+pdl:SubstitutionType_route a pdl:SubstitutionType ;
+    rdfs:label "Route Substitution"@en ;
+    rdfs:comment "Replacing one transport route with an alternative path. Typically involves increased cost and transit time."@en ;
+    skos:example "S1: Paranaguá statt Santos; S8: Kap der Guten Hoffnung statt Suez; S9: Landroute statt Unterwasserkabel"@de .
+
+pdl:SubstitutionType_technology a pdl:SubstitutionType ;
+    rdfs:label "Technology Substitution"@en ;
+    rdfs:comment "Replacing one technology or process with an alternative. Often involves quality_delta (efficiency loss) and long ramp_up."@en ;
+    skos:example "S5: UV/Ozon statt Chlor-Desinfektion; S7: Ferrit-Magnete statt NdFeB-Magnete"@de .
+
+pdl:SubstitutionType_buffer a pdl:SubstitutionType ;
+    rdfs:label "Buffer Substitution"@en ;
+    rdfs:comment "Temporary use of reserves or fallback capacity. Limited by duration_max; non-renewable in the short term."@en ;
+    skos:example "S1: Strategische Futtermittellager (45d); S6: CDN Edge Cache (12h); S7: Recycling-Infrastruktur"@de .
+
+pdl:SubstitutionType_mode a pdl:SubstitutionType ;
+    rdfs:label "Transport Mode Substitution"@en ;
+    rdfs:comment "Switching from one transport mode to another (sea/rail/air/road). Cost and capacity differ significantly."@en ;
+    skos:example "S8: Bahnfracht statt Seefracht (8,5% Volumen, +40% Kosten); S9: Satellit statt Kabel (<1% Kapazität)"@de .
+
+
+pdl:SubstitutionDirection a owl:Class ;
+    rdfs:label "Substitution Direction"@en ;
+    rdfs:comment "Indicates whether a substitution acts on the supply side or demand side of the market."@en .
+
+pdl:SubstitutionDirection_supply a pdl:SubstitutionDirection ;
+    rdfs:label "Supply-side Substitution"@en ;
+    rdfs:comment "The substitution replaces a supply source (default for most substitution types)."@en .
+
+pdl:SubstitutionDirection_demand a pdl:SubstitutionDirection ;
+    rdfs:label "Demand-side Substitution"@en ;
+    rdfs:comment "The substitution acts on the demand side: consumers shift to alternatives, reducing demand for the original product."@en ;
+    skos:example "S1: Verbraucher wechseln zu pflanzlichen Produkten (-8% Fleischnachfrage)"@de .
+
+
+pdl:SubstitutionSideEffect a owl:Class ;
+    rdfs:label "Substitution Side Effect"@en ;
+    rdfs:comment "A secondary consequence of activating a substitution, which may create new risks or cascade effects."@en ;
+    skos:definition "Side effects represent unintended consequences of substitution activation. A substitution that appears to reduce risk may simultaneously create new vulnerabilities through shared upstream dependencies (pseudo-diversification), market pressure, or technical performance loss."@en .
+
+pdl:SideEffectType a owl:Class ;
+    rdfs:label "Side Effect Type"@en ;
+    rdfs:comment "Enumeration of side effect categories observed in PROVIDER scenarios."@en .
+
+pdl:SideEffectType_price_pressure a pdl:SideEffectType ;
+    rdfs:label "Price Pressure"@en ;
+    rdfs:comment "Activation of substitution increases demand for the substitute, driving up its price."@en ;
+    skos:example "S1: Mehrnachfrage nach Rapsschrot treibt dessen Preis (+20%)"@de .
+
+pdl:SideEffectType_quality_loss a pdl:SideEffectType ;
+    rdfs:label "Quality Loss"@en ;
+    rdfs:comment "The substitute provides lower quality or performance than the original."@en ;
+    skos:example "S1: Rapsschrot hat ~12% geringeren Proteingehalt als Sojaschrot"@de .
+
+pdl:SideEffectType_correlated_risk a pdl:SideEffectType ;
+    rdfs:label "Correlated Risk (Pseudo-Diversification)"@en ;
+    rdfs:comment "The substitute shares upstream dependencies with the original, meaning a shock can disable both simultaneously. Key risk: apparent diversification that fails under compound crises."@en ;
+    skos:example "S3: Indien-Sourcing ist Pseudo-Alternative, da Indien zu 70% von chinesischen Intermediaten abhängt; S1: Argentinien bei La-Niña-Dürre gleichzeitig betroffen"@de .
+
+pdl:SideEffectType_depletion a pdl:SideEffectType ;
+    rdfs:label "Depletion"@en ;
+    rdfs:comment "Buffer substitutions are exhausted after duration_max and must be replenished, often at higher cost."@en ;
+    skos:example "S1: Futtermittellager nach 45d erschöpft; S6: Mobilfunk-Akkus nach 6h leer"@de .
+
+pdl:SideEffectType_efficiency_loss a pdl:SideEffectType ;
+    rdfs:label "Efficiency Loss"@en ;
+    rdfs:comment "Technology substitutions involve reduced technical efficiency or output performance."@en ;
+    skos:example "S7: Reluktanzmotoren haben 10-20% geringeren Wirkungsgrad als NdFeB-Magnetmotoren"@de .
+
+pdl:SideEffectType_capacity_loss a pdl:SideEffectType ;
+    rdfs:label "Capacity Loss"@en ;
+    rdfs:comment "During ramp-up or transition, available capacity is reduced below the target coverage level."@en ;
+    skos:example "S2: Während Foundry-Umqualifikation nur ~70% der Zielkapazität erreichbar"@de .
+
+pdl:SideEffectType_latency_increase a pdl:SideEffectType ;
+    rdfs:label "Latency Increase"@en ;
+    rdfs:comment "Route or mode substitutions introduce additional time delays (transit time, processing latency)."@en ;
+    skos:example "S6: Cloud-Failover nach Dublin +20-40ms; S9: Terrestrische Route +30-50ms"@de .
+
+pdl:SideEffectType_resistance_risk a pdl:SideEffectType ;
+    rdfs:label "Resistance Risk"@en ;
+    rdfs:comment "Product substitution in pharmaceuticals may promote antimicrobial resistance through cross-resistance or sub-therapeutic dosing."@en ;
+    skos:example "S3: Substitution Ciprofloxacin → Levofloxacin erhöht Kreuzresistenz-Risiko"@de .
+
+
+pdl:ActivationCondition a owl:Class ;
+    rdfs:label "Activation Condition"@en ;
+    rdfs:comment "The conditions under which a substitution is triggered, including event references and quantitative thresholds."@en .
 
 
 # =============================================================================
@@ -597,7 +721,7 @@ pdl:location a owl:DatatypeProperty ;
 
 pdl:dependencyType a owl:DatatypeProperty ;
     rdfs:label "dependency type"@en ;
-    rdfs:comment "Type of dependency relationship (energy, input, logistics, data)."@en ;
+    rdfs:comment "Type of dependency relationship (energy, input, logistics, data, substitution, demand)."@en ;
     rdfs:domain pdl:Dependency ;
     rdfs:range xsd:string .
 
@@ -611,6 +735,182 @@ pdl:triggerCondition a owl:DatatypeProperty ;
     rdfs:comment "Conditional expression for event triggering (e.g., 'brazil_drought.active')."@en ;
     rdfs:domain pdl:Event ;
     rdfs:range xsd:string .
+
+
+# =============================================================================
+# PART 3b: SUBSTITUTION PROPERTIES (PDL v1.1 Extension)
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# 3b.1 Substitution Object Properties
+# -----------------------------------------------------------------------------
+
+pdl:hasSubstitution a owl:ObjectProperty ;
+    rdfs:subPropertyOf pdl:hasScenarioElement ;
+    rdfs:label "has substitution"@en ;
+    rdfs:comment "Links a scenario to a substitution definition."@en ;
+    rdfs:domain pdl:Scenario ;
+    rdfs:range pdl:Substitution .
+
+pdl:substitutionFor a owl:ObjectProperty ;
+    rdfs:label "substitution for"@en ;
+    rdfs:comment "The original entity (product, supplier, route, technology) that this substitution replaces."@en ;
+    rdfs:domain pdl:Substitution ;
+    rdfs:range pdl:Entity ;
+    skos:note "Analogous to coy:hasSupplier from the perspective of the alternative chain."@en .
+
+pdl:substitutionBy a owl:ObjectProperty ;
+    rdfs:label "substitution by"@en ;
+    rdfs:comment "The substitute entity that takes over from the original."@en ;
+    rdfs:domain pdl:Substitution ;
+    rdfs:range pdl:Entity .
+
+pdl:substitutionTypeRef a owl:ObjectProperty ;
+    rdfs:label "substitution type"@en ;
+    rdfs:comment "Links a substitution to its type classification."@en ;
+    rdfs:domain pdl:Substitution ;
+    rdfs:range pdl:SubstitutionType .
+
+pdl:substitutionDirectionRef a owl:ObjectProperty ;
+    rdfs:label "substitution direction"@en ;
+    rdfs:comment "Indicates whether this substitution acts on supply side (default) or demand side."@en ;
+    rdfs:domain pdl:Substitution ;
+    rdfs:range pdl:SubstitutionDirection .
+
+pdl:hasActivationCondition a owl:ObjectProperty ;
+    rdfs:label "has activation condition"@en ;
+    rdfs:comment "Links a substitution to its activation condition, specifying when it is triggered."@en ;
+    rdfs:domain pdl:Substitution ;
+    rdfs:range pdl:ActivationCondition .
+
+pdl:activationEvent a owl:ObjectProperty ;
+    rdfs:label "activation event"@en ;
+    rdfs:comment "The event whose activation triggers this substitution."@en ;
+    rdfs:domain pdl:ActivationCondition ;
+    rdfs:range pdl:Event .
+
+pdl:hasSideEffect a owl:ObjectProperty ;
+    rdfs:label "has side effect"@en ;
+    rdfs:comment "Links a substitution to its secondary consequences."@en ;
+    rdfs:domain pdl:Substitution ;
+    rdfs:range pdl:SubstitutionSideEffect .
+
+pdl:sideEffectTypeRef a owl:ObjectProperty ;
+    rdfs:label "side effect type"@en ;
+    rdfs:comment "Classification of this side effect."@en ;
+    rdfs:domain pdl:SubstitutionSideEffect ;
+    rdfs:range pdl:SideEffectType .
+
+pdl:sideEffectTarget a owl:ObjectProperty ;
+    rdfs:label "side effect target"@en ;
+    rdfs:comment "The entity that bears the side effect (may differ from the substitution target)."@en ;
+    rdfs:domain pdl:SubstitutionSideEffect ;
+    rdfs:range pdl:Entity .
+
+pdl:hasDependencyOverlap a owl:ObjectProperty ;
+    rdfs:label "has dependency overlap"@en ;
+    rdfs:comment "Shared upstream dependency between original and substitute. Indicates pseudo-diversification: a shock to this shared entity disables both simultaneously."@en ;
+    rdfs:domain pdl:Substitution ;
+    rdfs:range pdl:Entity ;
+    skos:note "Critical for compound crisis analysis. Example: both soy and rapeseed depend on fertilizer_supply → drought + fertilizer shock eliminates both supply options."@en .
+
+pdl:substitutionRef a owl:ObjectProperty ;
+    rdfs:label "substitution reference"@en ;
+    rdfs:comment "Bidirectional link from an Event or Dependency to the Substitution it activates or implements."@en ;
+    rdfs:domain [ owl:unionOf (pdl:Event pdl:Dependency) ] ;
+    rdfs:range pdl:Substitution ;
+    owl:inverseOf pdl:substitutionActivatedBy .
+
+pdl:substitutionActivatedBy a owl:ObjectProperty ;
+    rdfs:label "substitution activated by"@en ;
+    rdfs:comment "Links a substitution to the event or dependency that activates it."@en ;
+    rdfs:domain pdl:Substitution ;
+    rdfs:range [ owl:unionOf (pdl:Event pdl:Dependency) ] .
+
+
+# -----------------------------------------------------------------------------
+# 3b.2 Substitution Datatype Properties
+# -----------------------------------------------------------------------------
+
+pdl:coverage a owl:DatatypeProperty ;
+    rdfs:label "coverage"@en ;
+    rdfs:comment "Maximum share of original supply/demand that the substitute can cover (0.0 to 1.0). Reflects structural capacity limits, not just short-term availability."@en ;
+    rdfs:domain pdl:Substitution ;
+    rdfs:range xsd:decimal ;
+    skos:example "0.20 (Rapsschrot ersetzt max. 20% des Sojaschrot-Bedarfs); 0.01 (Satellit ersetzt <1% der Kabelkapazität)"@de .
+
+pdl:qualityDelta a owl:DatatypeProperty ;
+    rdfs:label "quality delta"@en ;
+    rdfs:comment "Relative change in quality or performance of the substitute compared to the original. Negative values indicate degradation (e.g., -0.15 = 15% performance loss)."@en ;
+    rdfs:domain pdl:Substitution ;
+    rdfs:range xsd:decimal ;
+    skos:example "-0.15 (Reluktanzmotor 15% weniger effizient); -0.50 (Satellit-Internetqualität stark eingeschränkt)"@de .
+
+pdl:costDelta a owl:DatatypeProperty ;
+    rdfs:label "cost delta"@en ;
+    rdfs:comment "Relative cost increase of the substitute compared to the original (e.g., 0.40 = 40% more expensive)."@en ;
+    rdfs:domain pdl:Substitution ;
+    rdfs:range xsd:decimal ;
+    skos:example "5.0 (Luftfracht 500% teurer als Seefracht); 0.08 (Paranaguá nur marginal teurer als Santos)"@de .
+
+pdl:rampUp a owl:DatatypeProperty ;
+    rdfs:label "ramp-up duration"@en ;
+    rdfs:comment "Time until the substitution reaches its full coverage. Uses PDL duration format (e.g., '30d', '540d', '0d'). During ramp-up, effective coverage scales from 0 to the target value."@en ;
+    rdfs:domain pdl:Substitution ;
+    rdfs:range xsd:string ;
+    rdfs:subPropertyOf coy:hasTimespan ;
+    skos:example "'540d' (Foundry-Umqualifikation 6-18 Monate); '730d' (Magnetmotor-Umrüstung 2 Jahre); '0d' (CDN-Cache sofort aktiv)"@de .
+
+pdl:durationMax a owl:DatatypeProperty ;
+    rdfs:label "maximum duration"@en ;
+    rdfs:comment "For buffer substitutions: the maximum duration before the buffer is exhausted. After this period, the substitution is no longer available without replenishment."@en ;
+    rdfs:domain pdl:Substitution ;
+    rdfs:range xsd:string ;
+    skos:example "'45d' (Futtermittellager 30-45 Tage); '12h' (CDN Edge Cache); '6h' (Akkupuffer Mobilfunkmast)"@de .
+
+pdl:reversible a owl:DatatypeProperty ;
+    rdfs:label "reversible"@en ;
+    rdfs:comment "Whether the substitution can be reversed after activation (e.g., returning to original supplier when disruption ends)."@en ;
+    rdfs:domain pdl:Substitution ;
+    rdfs:range xsd:boolean ;
+    skos:note "False indicates structural commitment: once activated, switching back is not feasible in the short term (e.g., EU-Produktionsaufbau, Foundry-Qualifikation)."@en .
+
+pdl:activationTrigger a owl:DatatypeProperty ;
+    rdfs:label "activation trigger"@en ;
+    rdfs:comment "Event condition expression that triggers substitution activation (PDL condition syntax, e.g., 'feed_price_spike.active')."@en ;
+    rdfs:domain pdl:ActivationCondition ;
+    rdfs:range xsd:string .
+
+pdl:activationThresholdPriceIncrease a owl:DatatypeProperty ;
+    rdfs:label "activation threshold: price increase"@en ;
+    rdfs:comment "Minimum relative price increase required to activate the substitution (e.g., 0.25 = substitution activates when price rises >25%)."@en ;
+    rdfs:domain pdl:ActivationCondition ;
+    rdfs:range xsd:decimal .
+
+pdl:activationThresholdSupplyDrop a owl:DatatypeProperty ;
+    rdfs:label "activation threshold: supply drop"@en ;
+    rdfs:comment "Minimum relative supply reduction required to activate the substitution (e.g., 0.50 = activates when supply drops >50%)."@en ;
+    rdfs:domain pdl:ActivationCondition ;
+    rdfs:range xsd:decimal .
+
+pdl:activationThresholdDurationMin a owl:DatatypeProperty ;
+    rdfs:label "activation threshold: minimum duration"@en ;
+    rdfs:comment "Minimum duration of the triggering event before substitution activates (e.g., '30d' = only activates if disruption persists >30 days)."@en ;
+    rdfs:domain pdl:ActivationCondition ;
+    rdfs:range xsd:string .
+
+pdl:sideEffectMagnitude a owl:DatatypeProperty ;
+    rdfs:label "side effect magnitude"@en ;
+    rdfs:comment "Relative strength of the side effect (e.g., 0.20 = 20% price increase in the target entity)."@en ;
+    rdfs:domain pdl:SubstitutionSideEffect ;
+    rdfs:range xsd:decimal .
+
+pdl:substitutionPotential a owl:DatatypeProperty ;
+    rdfs:label "substitution potential"@en ;
+    rdfs:comment "Shorthand scalar on an Entity indicating its overall substitutability (0.0 = not substitutable, 1.0 = fully substitutable). Use pdl:Substitution for detailed modeling."@en ;
+    rdfs:domain pdl:Entity ;
+    rdfs:range xsd:decimal ;
+    skos:note "Corresponds to the YAML field 'substitution_potential' on entity level. Kept for backwards compatibility; detailed modeling uses the pdl:Substitution class."@en .
 
 
 # =============================================================================
@@ -659,6 +959,35 @@ pdl:hasLocation owl:equivalentProperty coy:hasLocation .
 pdl:hasCountryLocation owl:equivalentProperty coy:hasCountryLocation .
 
 
+# -----------------------------------------------------------------------------
+# 4.3 Substitution Alignments to CoyPu (v1.1)
+# -----------------------------------------------------------------------------
+
+# Substitution overall relates to supply chain resilience in CoyPu
+pdl:Substitution rdfs:subClassOf coy:SupplyChainObject ;
+    skos:mappingRelation coy:SupplyChainObject ;
+    skos:note "CoyPu does not have a direct Substitution class. pdl:Substitution extends the supply chain model with explicit resilience options."@en .
+
+# Supplier substitution: from/to map to CoyPu supplier relationship
+pdl:substitutionFor rdfs:subPropertyOf coy:hasSupplier ;
+    skos:note "For supplier substitutions, pdl:substitutionFor points to the original supplier entity, mapping to CoyPu's supply relationship."@en .
+
+pdl:substitutionBy rdfs:subPropertyOf coy:hasSupplier ;
+    skos:note "For supplier substitutions, pdl:substitutionBy points to the alternative supplier, also mapping to CoyPu's supply relationship."@en .
+
+# Coverage relates to CoyPu's trade flow quantities
+pdl:coverage rdfs:subPropertyOf coy:hasQuantity ;
+    skos:note "Coverage as a share (0-1) maps to CoyPu's quantity properties for trade flow modeling."@en .
+
+# Side effects map to CoyPu impact properties
+pdl:hasSideEffect rdfs:subPropertyOf coy:hasImpactOn ;
+    skos:note "Side effects are a form of impact relationship, extending CoyPu's impact model with substitution-specific consequences."@en .
+
+# Dependency overlap relates to CoyPu's shared supplier risk
+pdl:hasDependencyOverlap rdfs:subPropertyOf coy:hasSupplier ;
+    skos:note "Shared upstream dependencies map to CoyPu's supplier network; overlap indicates correlated risk in the supply graph."@en .
+
+
 # =============================================================================
 # PART 5: USAGE EXAMPLES (as SKOS notes)
 # =============================================================================
@@ -688,7 +1017,101 @@ pdlr:cascade_crisis a pdl:Cascade ;
     pdl:validationConfidence "0.85"^^xsd:decimal .
 """@en .
 
+pdl:Substitution skos:example """
+# Example: Protein substitution from S1 Soja
+pdlr:sub_protein_replacement a pdl:Substitution ;
+    dcterms:identifier "sub_protein_replacement" ;
+    rdfs:label "Sojaschrot → Rapsschrot/Sonnenblumenschrot/Erbsenprotein"@de ;
+    pdl:substitutionFor pdlr:entity_eu_oil_mills ;
+    pdl:substitutionBy pdlr:entity_alternative_protein_sources ;
+    pdl:substitutionTypeRef pdl:SubstitutionType_product ;
+    pdl:substitutionDirectionRef pdl:SubstitutionDirection_supply ;
+    pdl:coverage "0.20"^^xsd:decimal ;
+    pdl:qualityDelta "-0.12"^^xsd:decimal ;
+    pdl:costDelta "0.30"^^xsd:decimal ;
+    pdl:rampUp "21d" ;
+    pdl:reversible true ;
+    pdl:hasActivationCondition [
+        a pdl:ActivationCondition ;
+        pdl:activationTrigger "feed_price_spike.active" ;
+        pdl:activationThresholdPriceIncrease "0.25"^^xsd:decimal
+    ] ;
+    pdl:hasSideEffect [
+        a pdl:SubstitutionSideEffect ;
+        pdl:sideEffectTypeRef pdl:SideEffectType_price_pressure ;
+        pdl:sideEffectTarget pdlr:entity_alternative_protein_sources ;
+        pdl:sideEffectMagnitude "0.20"^^xsd:decimal
+    ] ;
+    pdl:hasDependencyOverlap pdlr:entity_fertilizer_supply ;
+    pdl:hasDependencyOverlap pdlr:entity_gas_supply ;
+    dcterms:references "UFOP 2022: Rapsschrot-Substitutionspotenzial ~15-20% bei Sojapreisschocks" .
+"""@en .
+
+pdl:SubstitutionSideEffect skos:example """
+# Example: Pseudo-diversification risk from S3 Pharma
+pdlr:se_india_correlated_risk a pdl:SubstitutionSideEffect ;
+    pdl:sideEffectTypeRef pdl:SideEffectType_correlated_risk ;
+    pdl:sideEffectTarget pdlr:entity_india_api_producers ;
+    pdl:sideEffectMagnitude "0.60"^^xsd:decimal ;
+    rdfs:comment "Indien-Sourcing ist Pseudo-Alternative: Indien zu 70% von chinesischen API-Intermediaten abhängig"@de .
+"""@en .
+
 
 # =============================================================================
-# END OF ONTOLOGY
+# PART 6: SCENARIO COVERAGE NOTES (v1.1)
+# =============================================================================
+# Documentation of substitution patterns identified in 9 PROVIDER scenarios.
+
+pdl:SubstitutionType_product skos:scopeNote """
+Scenarios: S1 (Rapsschrot/Erbsenprotein, Fleischsubstitution), S3 (Antibiotika-Äquivalente),
+S4 (biogenes CO2), S5 (UV/Ozon-Desinfektion).
+Key insight: product substitution often involves quality_delta < 0 and
+activates endogenously via price thresholds.
+"""@en .
+
+pdl:SubstitutionType_supplier skos:scopeNote """
+Scenarios: S1 (AR/USA statt BR), S2 (Samsung/UMC statt TSMC), S3 (Indien statt China),
+S4 (Ammoniak-Importe), S5 (Chlor-Importe NL/BE/FR), S7 (Lynas/MP Materials statt China), S8 (Nearshoring).
+Key insight: dependency_overlap is critical -- S3 Indien and S7 Lynas show pseudo-diversification
+where substitute shares same upstream (China intermediates, China processing).
+"""@en .
+
+pdl:SubstitutionType_route skos:scopeNote """
+Scenarios: S1 (Paranaguá statt Santos), S5 (Chlor-Importe), S8 (Kap der Guten Hoffnung), S9 (Landrouten).
+Key insight: route substitution often has coverage = 1.0 (all cargo can be rerouted)
+but significant cost_delta and side_effect capacity_loss (longer routes bind more capacity).
+"""@en .
+
+pdl:SubstitutionType_technology skos:scopeNote """
+Scenarios: S5 (UV/Ozon statt Chlor, nur Großversorger), S7 (Ferrit/Reluktanzmotoren statt NdFeB).
+Key insight: technology substitution is typically irreversible (capital investment) with
+long ramp_up and efficiency_loss. Coverage varies strongly by actor size (S5: 40% large utilities vs. 0% small).
+"""@en .
+
+pdl:SubstitutionType_buffer skos:scopeNote """
+Scenarios: S1 (Futtermittellager 45d), S5 (THW Notversorgung 30d), S6 (CDN Cache 12h, Akkus 6h),
+S7 (Recycling).
+Key insight: buffer substitution is strictly time-limited (duration_max) and non-reversible
+in the sense that replenishment requires additional time/cost. Buffer depletion is itself a cascade trigger.
+"""@en .
+
+pdl:SubstitutionType_mode skos:scopeNote """
+Scenarios: S8 (Bahn 8,5% Volumen/+40%, Luftfracht 2%/+500%), S9 (Satellit <1%/+200%).
+Key insight: mode substitution shows extreme cost/coverage tradeoffs.
+Coverage is structurally limited by infrastructure capacity, not just availability.
+"""@en .
+
+pdl:SideEffectType_correlated_risk skos:scopeNote """
+Most critical side effect type for compound crisis scenarios. Identified in:
+- S1: Argentinien/Brasilien both affected by La Niña (climate correlation)
+- S3: Indien/China share API intermediates (supply chain correlation)
+- S4: All EU ammonia producers affected by same gas price shock (energy correlation)
+- S7: Lynas oxides still processed in China (geographic concentration)
+- S9: Terrestrial routes via Russia (geopolitical correlation)
+SPARQL query recommendation: always check hasDependencyOverlap when evaluating substitution resilience.
+"""@en .
+
+
+# =============================================================================
+# END OF ONTOLOGY (v1.1)
 # =============================================================================

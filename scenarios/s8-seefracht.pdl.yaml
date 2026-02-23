@@ -273,7 +273,8 @@ supply_chains:
     dependencies:
       - from: bunker_fuel_supply
         to: cape_good_hope_route
-        type: energy
+        type: substitution
+        substitution_ref: sub_cape_reroute
         criticality: high
         note: "Umleitung erhöht Treibstoffverbrauch um 30-40%"
       - from: marine_insurance
@@ -293,9 +294,90 @@ supply_chains:
     dependencies:
       - from: german_industrial_imports
         to: china_europe_rail
-        type: logistics
+        type: substitution
+        substitution_ref: sub_rail_mode
         criticality: low
         note: "Bahnfracht deckt ~8,5% des China-EU-Handelswertes (2024), wachsend"
+      - from: german_industrial_imports
+        to: air_freight_capacity
+        type: substitution
+        substitution_ref: sub_air_mode
+        criticality: low
+        note: "Luftfracht nur für hochwertige Güter, ~2% des Volumens"
+      - from: german_industrial_imports
+        to: nearshoring_initiatives
+        type: substitution
+        substitution_ref: sub_nearshoring
+        criticality: low
+        note: "Nearshoring langfristig (+3 Jahre), kurzfristig ~3% Entlastung"
+
+# =============================================================================
+# Substitutions
+# =============================================================================
+substitutions:
+
+  - id: sub_cape_reroute
+    from: suez_canal
+    to: cape_good_hope_route
+    type: route
+    coverage: 1.0
+    quality_delta: 0.0
+    cost_delta: 0.40
+    ramp_up: 14d
+    activation:
+      trigger: "suez_blockage.active OR red_sea_attacks.active"
+    reversible: true
+    side_effects:
+      - type: capacity_loss
+        target: container_availability
+        description: "Längere Route bindet ~15% mehr Containerkapazität global"
+      - type: price_pressure
+        target: bunker_fuel_supply
+        description: "+40% Treibstoffverbrauch pro Voyage durch Kap-Umleitung"
+    reference: "Houthi-Krise 2024: >90% der Containerschiffe umgeleitet, +10-14 Tage Transit, +30-40% Treibstoff"
+
+  - id: sub_rail_mode
+    from: global_container_fleet
+    to: china_europe_rail
+    type: mode
+    coverage: 0.085
+    quality_delta: -0.05
+    cost_delta: 0.40
+    ramp_up: 7d
+    activation:
+      trigger: "industrial_supply_delay.active"
+    reversible: true
+    side_effects: []
+    dependency_overlap: []
+    reference: "~2,07 Mio. TEU/Jahr (2024, 19.000 Züge), ~8,5% des China-EU-Handelswertes, Transit 12-18 Tage; Russland-Transit bei Sanktionen riskant"
+
+  - id: sub_air_mode
+    from: global_container_fleet
+    to: air_freight_capacity
+    type: mode
+    coverage: 0.02
+    quality_delta: 0.0
+    cost_delta: 5.0
+    ramp_up: 3d
+    activation:
+      trigger: "industrial_supply_delay.active"
+    reversible: true
+    side_effects: []
+    reference: "Nur für hochwertige Güter (Chips, Pharma) wirtschaftlich; ~5x teurer als Seefracht, 30x schneller"
+
+  - id: sub_nearshoring
+    from: global_container_fleet
+    to: nearshoring_initiatives
+    type: supplier
+    coverage: 0.03
+    quality_delta: 0.0
+    cost_delta: 0.20
+    ramp_up: 1095d
+    activation:
+      trigger: "freight_rate_explosion.active AND freight_rate_explosion.duration > 90d"
+    reversible: false
+    side_effects: []
+    reference: "Verlagerung von Lieferketten nach Osteuropa, Türkei, Nordafrika — kurzfristig +3%, langfristig mehr; dauert 3 Jahre"
 
 # =============================================================================
 # Events
@@ -365,6 +447,7 @@ events:
   - id: cape_rerouting
     name: Umleitung über Kap der Guten Hoffnung
     type: infrastructure_failure
+    substitution_ref: sub_cape_reroute
     trigger:
       target: cape_good_hope_route
       condition: "suez_blockage.active OR red_sea_attacks.active"
@@ -573,6 +656,7 @@ events:
   - id: rail_freight_activated
     name: China-Europa Bahnfracht hochgefahren
     type: market_shock
+    substitution_ref: sub_rail_mode
     trigger:
       target: china_europe_rail
       condition: "industrial_supply_delay.active"
@@ -585,6 +669,7 @@ events:
   - id: air_freight_surge
     name: Luftfracht-Ausweichverkehr
     type: market_shock
+    substitution_ref: sub_air_mode
     trigger:
       target: air_freight_capacity
       condition: "industrial_supply_delay.active"
@@ -597,6 +682,7 @@ events:
   - id: nearshoring_acceleration
     name: Nearshoring-Beschleunigung
     type: regulatory
+    substitution_ref: sub_nearshoring
     trigger:
       target: nearshoring_initiatives
       condition: "freight_rate_explosion.active AND freight_rate_explosion.duration > 90d"

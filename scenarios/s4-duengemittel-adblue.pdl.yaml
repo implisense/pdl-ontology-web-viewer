@@ -276,6 +276,11 @@ supply_chains:
         to: ammonia_import_global
         type: input
         criticality: medium
+      - from: ammonia_supply
+        to: ammonia_import_global
+        type: substitution
+        substitution_ref: sub_ammonia_import
+        criticality: medium
 
   # CO2-Kette (Nebenprodukt)
   - id: co2_supply_chain
@@ -299,6 +304,11 @@ supply_chains:
       - from: co2_industrial
         to: bio_co2_sources
         type: input
+        criticality: medium
+      - from: co2_industrial
+        to: bio_co2_sources
+        type: substitution
+        substitution_ref: sub_bio_co2
         criticality: medium
 
   # Harnstoff/AdBlue-Kette
@@ -388,6 +398,62 @@ supply_chains:
         type: transport
         criticality: medium
         note: "Gas-Distribution teilweise per LKW (LNG, Flüssiggas)"
+
+# =============================================================================
+# Substitutions
+# =============================================================================
+substitutions:
+
+  # 1) Lieferantensubstitution: EU-Ammoniak-Produktion → Ammoniak-Importe
+  - id: sub_ammonia_import
+    from: ammonia_supply          # EU-Inlandsproduktion (basf_ludwigshafen, skw_piesteritz, yara_brunsbuettel, ineos_koeln)
+    to: ammonia_import_global     # Import aus Trinidad, Saudi-Arabien
+    type: supplier
+
+    coverage: 0.30                # DE importiert ~30 % des NH3-Bedarfs
+    quality_delta: 0.0            # gleichwertige Qualität
+    cost_delta: 0.80              # +80 % Kosten durch Seetransport und Spot-Markt-Aufschläge
+    ramp_up: 30d                  # Hochlauf Seehafen-Logistik 4-6 Wochen
+
+    activation:
+      trigger: "ammonia_production_halt.active"
+      threshold:
+        supply_drop: 0.30
+
+    reversible: true
+
+    side_effects:
+      - type: price_pressure
+        target: ammonia_import_global
+        description: "Steigende globale NH3-Nachfrage erhöht Spotpreise und verdrängt andere Importeure"
+
+    dependency_overlap: []        # Produktionsstandorte unabhängig von EU-Gasnetz
+
+    reference: "NH3-Importanteil DE ~30 %; Seehäfen Hamburg, Bremen als Umschlagspunkte; Hochlauf 4-6 Wochen (Trinidad/Saudi-Arabien)"
+
+  # 2) Produktsubstitution: Industrielles CO2 → Biogenes CO2
+  - id: sub_bio_co2
+    from: co2_industrial          # konventionelles Industrie-CO2 (Nebenprodukt NH3-Produktion)
+    to: bio_co2_sources           # Biogas-Anlagen, Fermentation, Brauereien
+    type: product
+
+    coverage: 0.15                # biogenes CO2 deckt ~10-15 % des Lebensmittel-CO2-Bedarfs
+    quality_delta: -0.05          # Reinheitsanforderungen (Lebensmittelgrade) schwieriger einzuhalten
+    cost_delta: 0.20              # +20 % Mehrkosten durch dezentrale Erfassung und Aufbereitung
+    ramp_up: 14d                  # Schnellerer Hochlauf da dezentrale Quellen vorhanden
+
+    activation:
+      trigger: "co2_shortage.active"
+      threshold:
+        supply_drop: 0.20
+
+    reversible: true
+
+    side_effects: []              # keine nennenswerten Nebeneffekte
+
+    dependency_overlap: []        # unabhängig von Erdgas-/NH3-Infrastruktur
+
+    reference: "Biogenes CO2 aus Biogas-Anlagen (~500 Anlagen DE), Brauereien, Bioethanol deckt 10-15 % Lebensmittel-CO2-Bedarf"
 
 # =============================================================================
 # Events
@@ -618,6 +684,7 @@ events:
       supply: "-20%"
       price: "+80%"
       duration: 90d
+    substitution_ref: sub_ammonia_import
     reference: "Import-NH3 aus Trinidad/Saudi-Arabien über Seehäfen, Hochlauf dauert 4-6 Wochen"
 
   - id: bio_co2_activated
@@ -630,6 +697,7 @@ events:
       supply: "-15%"
       price: "+100%"
       duration: 60d
+    substitution_ref: sub_bio_co2
     reference: "Biogas-Anlagen, Brauereien und Bioethanol liefern ~10-15% des CO2-Bedarfs"
 
   # Feedback-Loop Events

@@ -307,19 +307,115 @@ supply_chains:
     dependencies:
       - from: internet_backbone_de
         to: satellite_backup
-        type: data
+        type: substitution
+        substitution_ref: sub_satellite_backup
         criticality: low
         note: "Satelliten können <1% der Kabelkapazität ersetzen"
       - from: internet_backbone_de
         to: terrestrial_routes
-        type: data
+        type: substitution
+        substitution_ref: sub_terrestrial_rerouting
         criticality: medium
         note: "Landrouten via Russland geopolitisch riskant"
+      - from: internet_backbone_de
+        to: dns_root_infrastructure
+        type: substitution
+        substitution_ref: sub_dns_anycast_resilience
+        criticality: low
+        note: "DNS-Anycast hochredundant; Puffer für lokale Auflösung — schützt nicht vor Bandbreitenverlust"
       - from: cable_repair_fleet
         to: financial_sector_de
         type: financial
         criticality: medium
         note: "Feedback: Finanzstörung behindert Reparaturfinanzierung"
+
+# =============================================================================
+# Substitutions
+# =============================================================================
+substitutions:
+
+  # 1. Mediumsubstitution: Unterwasserkabel → Satellit (Starlink/SES/Eutelsat)
+  - id: sub_satellite_backup
+    from: cables_transatlantic
+    to: satellite_backup
+    type: mode
+
+    coverage: 0.01
+    quality_delta: -0.50
+    cost_delta: 2.0
+    ramp_up: 0d
+
+    activation:
+      trigger: "satellite_failover_activated.active"
+
+    reversible: true
+
+    side_effects:
+      - type: capacity_loss
+        target: internet_backbone_de
+        description: "Satellit ersetzt maximal 2-3 moderne Kabel, nicht ganze Routen; Gesamtkapazität Starlink ~600 Tbps entspricht <1% der globalen Unterseekabelkapazität"
+      - type: latency_increase
+        target: financial_trading_systems
+        description: "LEO-Satellitenlatenz 25-50ms vs. <10ms Glasfaser; HFT-Arbitrage nicht mehr wirtschaftlich"
+
+    dependency_overlap:
+      - internet_backbone_de
+
+    reference: "Starlink-Gesamtkonstellation ~600 Tbps (Ende 2025) ≈ 2-3 einzelne moderne Kabel; Marea allein 224 Tbps; globale Unterseekabelkapazität mehrere 100 Petabit/s"
+
+  # 2. Routensubstitution: Unterwasserkabel → Terrestrische Routen (via Russland/Kasachstan)
+  - id: sub_terrestrial_rerouting
+    from: cables_asia_europe
+    to: terrestrial_routes
+    type: route
+
+    coverage: 0.40
+    quality_delta: -0.30
+    cost_delta: 0.50
+    ramp_up: 7d
+
+    activation:
+      trigger: "terrestrial_rerouting_attempted.active"
+
+    reversible: true
+
+    side_effects:
+      - type: correlated_risk
+        target: terrestrial_routes
+        description: "Landrouten via Russland/Kasachstan bei geopolitischen Konflikten ebenfalls gefährdet; politischer Zugang kann jederzeit gesperrt werden"
+      - type: latency_increase
+        target: internet_backbone_de
+        description: "Terrestrische Umleitung erhöht Latenz Europa-Asien um 30-50ms; VPN-Tunnel instabil bei >500ms"
+
+    dependency_overlap:
+      - cable_chokepoints
+      - internet_backbone_de
+
+    reference: "Terrestrische Kapazität Europa-Asien begrenzt; Latenz +30-50ms; politische Abhängigkeit von Transitstaaten; Rerouting-Konfiguration erfordert ~7 Tage"
+
+  # 3. Puffersubstitution: DNS-Redundanz (Anycast-Infrastruktur)
+  - id: sub_dns_anycast_resilience
+    from: internet_backbone_de
+    to: dns_root_infrastructure
+    type: buffer
+
+    coverage: 0.95
+    quality_delta: 0.0
+    cost_delta: 0.0
+    ramp_up: 0d
+    duration_max: null
+
+    activation:
+      trigger: "dns_resilience_holds.active"
+
+    reversible: true
+
+    side_effects: []
+
+    dependency_overlap:
+      - internet_backbone_de
+
+    reference: "13 Root-Server mit >1.600 Anycast-Instanzen weltweit; lokale Resolver-Caches in DE; DNS selbst ist nicht das Problem — Bandbreite und physische Kabelkapazität sind das Problem"
 
 # =============================================================================
 # Events
@@ -555,6 +651,7 @@ events:
   - id: satellite_failover_activated
     name: Satellitenkapazität aktiviert (marginal)
     type: infrastructure_failure
+    substitution_ref: sub_satellite_backup
     trigger:
       target: satellite_backup
       condition: "bandwidth_reduction_europe.active"
@@ -566,6 +663,7 @@ events:
   - id: terrestrial_rerouting_attempted
     name: Terrestrische Umleitung versucht
     type: infrastructure_failure
+    substitution_ref: sub_terrestrial_rerouting
     trigger:
       target: terrestrial_routes
       condition: "bandwidth_reduction_europe.active"
@@ -579,6 +677,7 @@ events:
   - id: dns_resilience_holds
     name: DNS-Infrastruktur bleibt stabil
     type: infrastructure_failure
+    substitution_ref: sub_dns_anycast_resilience
     trigger:
       target: dns_root_infrastructure
       condition: "bandwidth_reduction_europe.active"

@@ -285,6 +285,30 @@ supply_chains:
         type: input
         criticality: medium
         note: "Lynas-Oxide müssen noch zu Magneten verarbeitet werden — meist in China"
+      - from: ndfeb_magnet_producers
+        to: lynas_malaysia
+        type: substitution
+        substitution_ref: sub_alt_sourcing
+        criticality: medium
+        note: "Lieferantensubstitution: China-Verarbeitung → Lynas/MP Materials (max. 9% Deckung)"
+      - from: ev_motor_producers_de
+        to: alternative_magnet_tech
+        type: substitution
+        substitution_ref: sub_alt_magnet_tech
+        criticality: medium
+        note: "Technologiesubstitution: NdFeB-Magnete → Ferrit/Reluktanz (80% Deckung, -15% Effizienz, 730d Ramp-up)"
+      - from: ndfeb_magnet_producers
+        to: recycling_infrastructure
+        type: substitution
+        substitution_ref: sub_recycling_buffer
+        criticality: low
+        note: "Buffer-Substitution: Urban Mining / SE-Recycling (3% Deckung, 365d Ramp-up, strukturell irreversibel)"
+      - from: wind_turbine_producers
+        to: alternative_magnet_tech
+        type: substitution
+        substitution_ref: sub_alt_magnet_tech
+        criticality: medium
+        note: "Technologiesubstitution Windkraft: elektrisch erregte Generatoren statt NdFeB-Direct-Drive"
       - from: automotive_oem_de
         to: ev_market_de
         type: demand
@@ -295,6 +319,95 @@ supply_chains:
         type: input
         criticality: medium
         note: "Umrüstung auf Reluktanzmotoren dauert 12-24 Monate"
+
+# =============================================================================
+# Substitutions
+# =============================================================================
+substitutions:
+
+  # 1. Lieferantensubstitution: China-Förderung/Verarbeitung → Lynas + MP Materials
+  - id: sub_alt_sourcing
+    from: china_separation_plants
+    to: lynas_malaysia
+    type: supplier
+    coverage: 0.09
+    quality_delta: 0.0
+    cost_delta: 0.80
+    ramp_up: 365d
+
+    activation:
+      trigger: "china_export_restriction.active"
+      threshold:
+        supply_drop: 0.50
+
+    reversible: true
+
+    side_effects:
+      - type: correlated_risk
+        target: ndfeb_magnet_producers
+        magnitude: 0.70
+        description: "Lynas-Oxide werden überwiegend in China zu Magneten verarbeitet — Verarbeitungsmonopol bleibt bestehen"
+      - type: price_pressure
+        target: lynas_malaysia
+        magnitude: 0.80
+        description: "Nachfragesprung durch China-Ausfall treibt Lynas/MP-Materials-Preise stark in die Höhe"
+
+    dependency_overlap:
+      - china_separation_plants
+
+    reference: "Lynas ~10.500 t NdPr-Oxid/Jahr + MP Materials ~1.300 t NdPr-Oxid/Jahr = zusammen <10% des Weltbedarfs (2024)"
+
+  # 2. Technologiesubstitution: NdFeB-Magnete → Ferrit-Magnete / Reluktanzmotoren
+  - id: sub_alt_magnet_tech
+    from: ndfeb_magnet_producers
+    to: alternative_magnet_tech
+    type: technology
+    coverage: 0.80
+    quality_delta: -0.15
+    cost_delta: 0.25
+    ramp_up: 730d
+
+    activation:
+      trigger: "ev_motor_shortage.active"
+      threshold:
+        supply_drop: 0.40
+
+    reversible: true
+
+    side_effects:
+      - type: efficiency_loss
+        target: ev_motor_producers_de
+        magnitude: 0.15
+        description: "Reluktanz- und Ferritmotoren haben 10–20% Effizienzverlust gegenüber NdFeB-Permanentmagnetmotoren"
+      - type: efficiency_loss
+        target: wind_turbine_producers
+        magnitude: 0.12
+        description: "Alternative Generatorkonzepte (elektrisch erregt) erfordern Umkonstruktion und haben höhere Kupferverluste"
+
+    dependency_overlap: []
+
+    reference: "Ferrit-Magnete, Reluktanzmotoren, axiale Flussmotoren — technisch für ~80% der Anwendungen realisierbar; Umrüstung 12–24 Monate"
+
+  # 3. Kreislaufwirtschaft: Recycling als struktureller Buffer
+  - id: sub_recycling_buffer
+    from: ndfeb_magnet_producers
+    to: recycling_infrastructure
+    type: buffer
+    coverage: 0.03
+    quality_delta: 0.0
+    cost_delta: 0.60
+    ramp_up: 365d
+
+    activation:
+      trigger: "ndfeb_magnet_shortage.active"
+      threshold:
+        supply_drop: 0.50
+
+    reversible: false
+
+    side_effects: []
+
+    reference: "Aktuelle Recyclingquote <1%; mit Hochlauf und Urban-Mining-Ausbau Potenzial ~3% kurzfristig, 15–25% langfristig (EU CRMA-Ziel: 25% bis 2030)"
 
 # =============================================================================
 # Events
@@ -558,6 +671,7 @@ events:
   - id: alternative_sourcing_activated
     name: Alternative Quellen aktiviert (Lynas, MP Materials)
     type: market_shock
+    substitution_ref: sub_alt_sourcing
     trigger:
       target: lynas_malaysia
       condition: "china_export_restriction.active"
@@ -570,6 +684,7 @@ events:
   - id: alternative_motor_development
     name: Alternative Motortechnologie beschleunigt
     type: regulatory
+    substitution_ref: sub_alt_magnet_tech
     trigger:
       target: alternative_magnet_tech
       condition: "ev_motor_shortage.active AND ev_motor_shortage.duration > 60d"
@@ -581,6 +696,7 @@ events:
   - id: recycling_rampup
     name: SE-Recycling beschleunigt
     type: regulatory
+    substitution_ref: sub_recycling_buffer
     trigger:
       target: recycling_infrastructure
       condition: "ndfeb_magnet_shortage.active"

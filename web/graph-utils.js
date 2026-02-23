@@ -15,9 +15,22 @@ export function parsePercentage(pct) {
   return Number.parseInt(match[1], 10) / 100;
 }
 
+function extractEventIdsFromTrigger(triggerExpression) {
+  if (!triggerExpression || typeof triggerExpression !== "string") return [];
+  const ids = new Set();
+  const pattern = /\b([a-z][a-z0-9_]*)\.active\b/g;
+  let match = pattern.exec(triggerExpression);
+  while (match) {
+    ids.add(match[1]);
+    match = pattern.exec(triggerExpression);
+  }
+  return Array.from(ids);
+}
+
 export function convertToGraphJson(pdl) {
   const nodes = [];
   const edges = [];
+  const eventIds = new Set((pdl.events || []).map((event) => event.id));
 
   if (pdl.entities) {
     for (const entity of pdl.entities) {
@@ -67,6 +80,21 @@ export function convertToGraphJson(pdl) {
               criticality: dep.criticality
             }
           });
+
+          if (dep.substitution_ref) {
+            edges.push({
+              id: `edge:${chain.id}-dep-sub-${idx}`,
+              from: `entity:${dep.from}`,
+              to: `substitution:${dep.substitution_ref}`,
+              type: "dependency_substitution",
+              data: {
+                chain_id: chain.id,
+                dependency_type: dep.type,
+                from: dep.from,
+                to: dep.to
+              }
+            });
+          }
         });
       }
     }
@@ -116,6 +144,87 @@ export function convertToGraphJson(pdl) {
           });
         });
       }
+
+      if (event.substitution_ref) {
+        edges.push({
+          id: `edge:${event.id}-substitution-ref`,
+          from: node.id,
+          to: `substitution:${event.substitution_ref}`,
+          type: "substitution_ref",
+          data: { source: "event" }
+        });
+      }
+    }
+  }
+
+  if (pdl.substitutions) {
+    for (const substitution of pdl.substitutions) {
+      const node = {
+        id: `substitution:${substitution.id}`,
+        type: "substitution",
+        subtype: substitution.type,
+        label: substitution.id,
+        data: {
+          ...substitution,
+          ramp_up_days: parseDurationToDays(substitution.ramp_up),
+          duration_max_days: parseDurationToDays(substitution.duration_max)
+        }
+      };
+      nodes.push(node);
+
+      if (substitution.from) {
+        edges.push({
+          id: `edge:${substitution.id}-for`,
+          from: `entity:${substitution.from}`,
+          to: node.id,
+          type: "substitution_for"
+        });
+      }
+
+      if (substitution.to) {
+        edges.push({
+          id: `edge:${substitution.id}-by`,
+          from: node.id,
+          to: `entity:${substitution.to}`,
+          type: "substitution_by"
+        });
+      }
+
+      const triggerEvents = extractEventIdsFromTrigger(substitution.activation?.trigger);
+      triggerEvents.forEach((eventId, idx) => {
+        if (!eventIds.has(eventId)) return;
+        edges.push({
+          id: `edge:${substitution.id}-activation-${idx}`,
+          from: `event:${eventId}`,
+          to: node.id,
+          type: "activation",
+          data: { trigger: substitution.activation?.trigger }
+        });
+      });
+
+      (substitution.side_effects || []).forEach((sideEffect, idx) => {
+        if (!sideEffect.target) return;
+        edges.push({
+          id: `edge:${substitution.id}-side-effect-${idx}`,
+          from: node.id,
+          to: `entity:${sideEffect.target}`,
+          type: "side_effect",
+          data: {
+            effect_type: sideEffect.type,
+            magnitude: sideEffect.magnitude,
+            description: sideEffect.description
+          }
+        });
+      });
+
+      (substitution.dependency_overlap || []).forEach((entityId, idx) => {
+        edges.push({
+          id: `edge:${substitution.id}-overlap-${idx}`,
+          from: node.id,
+          to: `entity:${entityId}`,
+          type: "dependency_overlap"
+        });
+      });
     }
   }
 

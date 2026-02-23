@@ -39,17 +39,6 @@ function logSuccess(message) {
   log(`SUCCESS: ${message}`, 'green');
 }
 
-function logWarning(message) {
-  log(`WARNING: ${message}`, 'yellow');
-}
-
-function logInfo(message) {
-  log(`INFO: ${message}`, 'blue');
-}
-
-/**
- * Load and parse a YAML file
- */
 function loadYamlFile(filePath) {
   if (!existsSync(filePath)) {
     throw new Error(`File not found: ${filePath}`);
@@ -63,9 +52,6 @@ function loadYamlFile(filePath) {
   }
 }
 
-/**
- * Load the PDL schema
- */
 function loadSchema() {
   const schemaPath = resolve(__dirname, '../schemas/pdl-schema.json');
   if (!existsSync(schemaPath)) {
@@ -76,26 +62,31 @@ function loadSchema() {
   return JSON.parse(content);
 }
 
-/**
- * Validate entity references
- * Checks that all referenced entity IDs exist
- */
-function validateEntityReferences(pdl, verbose) {
+function extractEventIdsFromTrigger(triggerExpression) {
+  if (!triggerExpression || typeof triggerExpression !== 'string') return [];
+  const ids = new Set();
+  const pattern = /\b([a-z][a-z0-9_]*)\.active\b/g;
+  let match = pattern.exec(triggerExpression);
+  while (match) {
+    ids.add(match[1]);
+    match = pattern.exec(triggerExpression);
+  }
+  return Array.from(ids);
+}
+
+function validateEntityReferences(pdl) {
   const errors = [];
   const warnings = [];
 
-  // Collect all entity IDs
-  const entityIds = new Set();
-  if (pdl.entities) {
-    pdl.entities.forEach(e => entityIds.add(e.id));
-  }
+  const entityIds = new Set((pdl.entities || []).map((e) => e.id));
+  const eventIds = new Set((pdl.events || []).map((e) => e.id));
+  const substitutionIds = new Set((pdl.substitutions || []).map((s) => s.id));
 
-  // Check supply chain references
   if (pdl.supply_chains) {
-    pdl.supply_chains.forEach(chain => {
+    pdl.supply_chains.forEach((chain) => {
       if (chain.stages) {
         chain.stages.forEach((stage, idx) => {
-          stage.forEach(entityId => {
+          stage.forEach((entityId) => {
             if (!entityIds.has(entityId)) {
               warnings.push(`Supply chain "${chain.id}" stage ${idx + 1} references unknown entity: "${entityId}"`);
             }
@@ -104,51 +95,84 @@ function validateEntityReferences(pdl, verbose) {
       }
 
       if (chain.dependencies) {
-        chain.dependencies.forEach(dep => {
+        chain.dependencies.forEach((dep, idx) => {
           if (!entityIds.has(dep.from)) {
             warnings.push(`Supply chain "${chain.id}" dependency references unknown "from" entity: "${dep.from}"`);
           }
           if (!entityIds.has(dep.to)) {
             warnings.push(`Supply chain "${chain.id}" dependency references unknown "to" entity: "${dep.to}"`);
           }
-        });
-      }
-    });
-  }
-
-  // Check event references
-  const eventIds = new Set();
-  if (pdl.events) {
-    pdl.events.forEach(e => eventIds.add(e.id));
-
-    pdl.events.forEach(event => {
-      if (event.trigger && event.trigger.target) {
-        if (!entityIds.has(event.trigger.target)) {
-          warnings.push(`Event "${event.id}" trigger references unknown entity: "${event.trigger.target}"`);
-        }
-      }
-
-      if (event.causes) {
-        event.causes.forEach(causeId => {
-          if (!eventIds.has(causeId)) {
-            warnings.push(`Event "${event.id}" causes unknown event: "${causeId}"`);
+          if (dep.substitution_ref && !substitutionIds.has(dep.substitution_ref)) {
+            warnings.push(`Supply chain "${chain.id}" dependency ${idx + 1} references unknown substitution_ref: "${dep.substitution_ref}"`);
           }
         });
       }
     });
   }
 
-  // Check cascade references
+  if (pdl.events) {
+    pdl.events.forEach((event) => {
+      if (event.trigger && event.trigger.target && !entityIds.has(event.trigger.target)) {
+        warnings.push(`Event "${event.id}" trigger references unknown entity: "${event.trigger.target}"`);
+      }
+
+      if (event.causes) {
+        event.causes.forEach((causeId) => {
+          if (!eventIds.has(causeId)) {
+            warnings.push(`Event "${event.id}" causes unknown event: "${causeId}"`);
+          }
+        });
+      }
+
+      if (event.substitution_ref && !substitutionIds.has(event.substitution_ref)) {
+        warnings.push(`Event "${event.id}" references unknown substitution_ref: "${event.substitution_ref}"`);
+      }
+    });
+  }
+
+  if (pdl.substitutions) {
+    pdl.substitutions.forEach((substitution) => {
+      if (substitution.from && !entityIds.has(substitution.from)) {
+        warnings.push(`Substitution "${substitution.id}" references unknown from entity: "${substitution.from}"`);
+      }
+      if (substitution.to && !entityIds.has(substitution.to)) {
+        warnings.push(`Substitution "${substitution.id}" references unknown to entity: "${substitution.to}"`);
+      }
+
+      const triggerEvents = extractEventIdsFromTrigger(substitution.activation?.trigger);
+      triggerEvents.forEach((eventId) => {
+        if (!eventIds.has(eventId)) {
+          warnings.push(`Substitution "${substitution.id}" activation trigger references unknown event: "${eventId}"`);
+        }
+      });
+
+      (substitution.side_effects || []).forEach((effect, idx) => {
+        if (effect.target && !entityIds.has(effect.target)) {
+          warnings.push(`Substitution "${substitution.id}" side_effect ${idx + 1} references unknown target entity: "${effect.target}"`);
+        }
+      });
+
+      (substitution.dependency_overlap || []).forEach((entityId) => {
+        if (!entityIds.has(entityId)) {
+          warnings.push(`Substitution "${substitution.id}" dependency_overlap references unknown entity: "${entityId}"`);
+        }
+      });
+    });
+  }
+
   if (pdl.cascades) {
-    pdl.cascades.forEach(cascade => {
+    pdl.cascades.forEach((cascade) => {
       if (cascade.origin && !eventIds.has(cascade.origin)) {
         warnings.push(`Cascade "${cascade.id}" references unknown origin event: "${cascade.origin}"`);
       }
 
       if (cascade.timeline) {
         cascade.timeline.forEach((entry, idx) => {
+          if (entry.event && !eventIds.has(entry.event)) {
+            warnings.push(`Cascade "${cascade.id}" timeline entry ${idx + 1} references unknown event: "${entry.event}"`);
+          }
           if (entry.affects) {
-            entry.affects.forEach(entityId => {
+            entry.affects.forEach((entityId) => {
               if (!entityIds.has(entityId)) {
                 warnings.push(`Cascade "${cascade.id}" timeline entry ${idx + 1} affects unknown entity: "${entityId}"`);
               }
@@ -162,11 +186,7 @@ function validateEntityReferences(pdl, verbose) {
   return { errors, warnings };
 }
 
-/**
- * Validate timeline consistency
- * Checks that timeline entries are in chronological order
- */
-function validateTimelineConsistency(pdl, verbose) {
+function validateTimelineConsistency(pdl) {
   const warnings = [];
 
   function parseDuration(duration) {
@@ -177,18 +197,18 @@ function validateTimelineConsistency(pdl, verbose) {
     const unit = match[2];
 
     const multipliers = {
-      'h': 1/24,
-      'd': 1,
-      'w': 7,
-      'm': 30,
-      'y': 365
+      h: 1 / 24,
+      d: 1,
+      w: 7,
+      m: 30,
+      y: 365
     };
 
     return value * (multipliers[unit] || 1);
   }
 
   if (pdl.cascades) {
-    pdl.cascades.forEach(cascade => {
+    pdl.cascades.forEach((cascade) => {
       if (cascade.timeline && cascade.timeline.length > 1) {
         let lastTime = -1;
         cascade.timeline.forEach((entry, idx) => {
@@ -205,16 +225,13 @@ function validateTimelineConsistency(pdl, verbose) {
   return { warnings };
 }
 
-/**
- * Validate duplicate IDs
- */
-function validateUniqueIds(pdl, verbose) {
+function validateUniqueIds(pdl) {
   const errors = [];
 
   function checkDuplicates(items, type) {
     if (!items) return;
     const seen = new Set();
-    items.forEach(item => {
+    items.forEach((item) => {
       if (seen.has(item.id)) {
         errors.push(`Duplicate ${type} ID: "${item.id}"`);
       }
@@ -224,15 +241,13 @@ function validateUniqueIds(pdl, verbose) {
 
   checkDuplicates(pdl.entities, 'entity');
   checkDuplicates(pdl.supply_chains, 'supply_chain');
+  checkDuplicates(pdl.substitutions, 'substitution');
   checkDuplicates(pdl.events, 'event');
   checkDuplicates(pdl.cascades, 'cascade');
 
   return { errors };
 }
 
-/**
- * Main validation function
- */
 async function validate(filePath, verbose = false) {
   const results = {
     valid: true,
@@ -243,16 +258,13 @@ async function validate(filePath, verbose = false) {
   };
 
   try {
-    // Load PDL file
-    if (verbose) logInfo(`Loading PDL file: ${filePath}`);
+    if (verbose) console.log(`INFO: Loading PDL file: ${filePath}`);
     const pdl = loadYamlFile(filePath);
 
-    // Load schema
-    if (verbose) logInfo('Loading PDL schema...');
+    if (verbose) console.log('INFO: Loading PDL schema...');
     const schema = loadSchema();
 
-    // Schema validation
-    if (verbose) logInfo('Validating against JSON schema...');
+    if (verbose) console.log('INFO: Validating against JSON schema...');
     const ajv = new Ajv({ allErrors: true, strict: false });
     addFormats(ajv);
 
@@ -261,43 +273,36 @@ async function validate(filePath, verbose = false) {
 
     if (!schemaValid) {
       results.valid = false;
-      results.schemaErrors = validateSchema.errors.map(err => {
-        return `${err.instancePath || '/'}: ${err.message}`;
-      });
+      results.schemaErrors = validateSchema.errors.map((err) => `${err.instancePath || '/'}: ${err.message}`);
     }
 
-    // Semantic validations
-    if (verbose) logInfo('Running semantic validations...');
+    if (verbose) console.log('INFO: Running semantic validations...');
 
-    // Check unique IDs
-    const uniqueCheck = validateUniqueIds(pdl, verbose);
+    const uniqueCheck = validateUniqueIds(pdl);
     if (uniqueCheck.errors.length > 0) {
       results.valid = false;
       results.semanticErrors.push(...uniqueCheck.errors);
     }
 
-    // Check entity references
-    const refCheck = validateEntityReferences(pdl, verbose);
+    const refCheck = validateEntityReferences(pdl);
     if (refCheck.errors.length > 0) {
       results.valid = false;
       results.semanticErrors.push(...refCheck.errors);
     }
     results.warnings.push(...refCheck.warnings);
 
-    // Check timeline consistency
-    const timelineCheck = validateTimelineConsistency(pdl, verbose);
+    const timelineCheck = validateTimelineConsistency(pdl);
     results.warnings.push(...timelineCheck.warnings);
 
-    // Collect statistics
     results.stats = {
       pdl_version: pdl.pdl_version,
       scenario: pdl.scenario?.name || pdl.scenario?.id,
       entities: pdl.entities?.length || 0,
       supply_chains: pdl.supply_chains?.length || 0,
+      substitutions: pdl.substitutions?.length || 0,
       events: pdl.events?.length || 0,
       cascades: pdl.cascades?.length || 0
     };
-
   } catch (e) {
     results.valid = false;
     results.semanticErrors.push(e.message);
@@ -306,51 +311,44 @@ async function validate(filePath, verbose = false) {
   return results;
 }
 
-/**
- * Format validation results for output
- */
-function formatResults(results, verbose) {
+function formatResults(results) {
   console.log('\n' + colors.bold + '=== PDL Validation Results ===' + colors.reset + '\n');
 
-  // Statistics
   if (results.stats.scenario) {
     console.log(`Scenario: ${results.stats.scenario}`);
     console.log(`PDL Version: ${results.stats.pdl_version}`);
     console.log(`Entities: ${results.stats.entities}`);
     console.log(`Supply Chains: ${results.stats.supply_chains}`);
+    console.log(`Substitutions: ${results.stats.substitutions}`);
     console.log(`Events: ${results.stats.events}`);
     console.log(`Cascades: ${results.stats.cascades}`);
     console.log('');
   }
 
-  // Schema errors
   if (results.schemaErrors.length > 0) {
     log('Schema Validation Errors:', 'red');
-    results.schemaErrors.forEach(err => {
+    results.schemaErrors.forEach((err) => {
       console.log(`  - ${err}`);
     });
     console.log('');
   }
 
-  // Semantic errors
   if (results.semanticErrors.length > 0) {
     log('Semantic Errors:', 'red');
-    results.semanticErrors.forEach(err => {
+    results.semanticErrors.forEach((err) => {
       console.log(`  - ${err}`);
     });
     console.log('');
   }
 
-  // Warnings
   if (results.warnings.length > 0) {
     log('Warnings:', 'yellow');
-    results.warnings.forEach(warn => {
+    results.warnings.forEach((warn) => {
       console.log(`  - ${warn}`);
     });
     console.log('');
   }
 
-  // Final status
   if (results.valid) {
     if (results.warnings.length > 0) {
       logSuccess(`Validation passed with ${results.warnings.length} warning(s)`);
@@ -365,7 +363,6 @@ function formatResults(results, verbose) {
   return results.valid;
 }
 
-// CLI entry point
 async function main() {
   const args = process.argv.slice(2);
 
@@ -398,7 +395,7 @@ Examples:
     if (jsonOutput) {
       console.log(JSON.stringify(results, null, 2));
     } else {
-      formatResults(results, verbose);
+      formatResults(results);
     }
 
     process.exit(results.valid ? 0 : 1);
@@ -408,8 +405,6 @@ Examples:
   }
 }
 
-// Export for use as module
 export { validate, loadYamlFile, loadSchema };
 
-// Run if called directly
 main();

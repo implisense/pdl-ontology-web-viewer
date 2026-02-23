@@ -28,6 +28,13 @@
       },
       "description": "Value chains and dependencies"
     },
+    "substitutions": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/substitution"
+      },
+      "description": "Substitution mechanisms and activation conditions"
+    },
     "events": {
       "type": "array",
       "items": {
@@ -104,6 +111,12 @@
           "minimum": 0,
           "maximum": 1,
           "description": "Vulnerability score (0-1)"
+        },
+        "substitution_potential": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Entity-level substitution potential (0-1)"
         }
       },
       "additionalProperties": true
@@ -157,12 +170,163 @@
         },
         "type": {
           "type": "string",
-          "description": "Dependency type (e.g., energy, logistics, data)"
+          "description": "Dependency type (e.g., energy, input, logistics, data, substitution, demand)"
         },
         "criticality": {
           "type": "string",
           "enum": ["high", "medium", "low"],
           "description": "Dependency criticality"
+        },
+        "substitution_ref": {
+          "type": "string",
+          "description": "Reference to a substitution definition"
+        }
+      },
+      "additionalProperties": true
+    },
+    "substitution": {
+      "type": "object",
+      "required": ["id", "from", "to", "type"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "description": "Unique substitution identifier"
+        },
+        "from": {
+          "type": "string",
+          "description": "Entity ID being replaced"
+        },
+        "to": {
+          "type": "string",
+          "description": "Entity ID that substitutes"
+        },
+        "type": {
+          "type": "string",
+          "enum": ["product", "supplier", "route", "technology", "buffer", "mode"],
+          "description": "Substitution type"
+        },
+        "direction": {
+          "type": "string",
+          "enum": ["supply", "demand"],
+          "description": "Substitution direction"
+        },
+        "coverage": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Maximum substitution coverage (0-1)"
+        },
+        "quality_delta": {
+          "type": "number",
+          "description": "Relative quality/performance change"
+        },
+        "cost_delta": {
+          "type": "number",
+          "description": "Relative cost change"
+        },
+        "ramp_up": {
+          "type": "string",
+          "pattern": "^[0-9]+[dhwmy]$",
+          "description": "Ramp-up duration"
+        },
+        "duration_max": {
+          "type": "string",
+          "pattern": "^[0-9]+[dhwmy]$",
+          "description": "Maximum duration for buffer substitutions"
+        },
+        "reversible": {
+          "type": "boolean",
+          "description": "Whether substitution can be reversed"
+        },
+        "activation": {
+          "$ref": "#/definitions/activation",
+          "description": "Activation conditions"
+        },
+        "side_effects": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/sideEffect"
+          },
+          "description": "Substitution side effects"
+        },
+        "dependency_overlap": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Shared upstream dependencies (pseudo-diversification risk)"
+        },
+        "reference": {
+          "type": "string",
+          "description": "Documentation reference"
+        }
+      },
+      "additionalProperties": true
+    },
+    "activation": {
+      "type": "object",
+      "properties": {
+        "trigger": {
+          "type": "string",
+          "description": "Trigger expression"
+        },
+        "threshold": {
+          "$ref": "#/definitions/activationThreshold",
+          "description": "Quantitative activation thresholds"
+        }
+      },
+      "additionalProperties": true
+    },
+    "activationThreshold": {
+      "type": "object",
+      "properties": {
+        "price_increase": {
+          "type": "number",
+          "description": "Activation threshold for price increase (decimal)"
+        },
+        "supply_drop": {
+          "type": "number",
+          "description": "Activation threshold for supply drop (decimal)"
+        },
+        "duration_min": {
+          "type": "string",
+          "pattern": "^[0-9]+[dhwmy]$",
+          "description": "Minimum disruption duration before activation"
+        }
+      },
+      "additionalProperties": true
+    },
+    "sideEffect": {
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "price_pressure",
+            "quality_loss",
+            "correlated_risk",
+            "depletion",
+            "efficiency_loss",
+            "capacity_loss",
+            "latency_increase",
+            "resistance_risk",
+            "demand_reduction"
+          ],
+          "description": "Side effect type"
+        },
+        "target": {
+          "type": "string",
+          "description": "Entity ID affected by the side effect"
+        },
+        "magnitude": {
+          "type": "number",
+          "description": "Relative side effect magnitude"
+        },
+        "description": {
+          "type": "string",
+          "description": "Human-readable side effect description"
         }
       },
       "additionalProperties": true
@@ -182,7 +346,15 @@
         },
         "type": {
           "type": "string",
-          "enum": ["natural_disaster", "market_shock", "infrastructure_failure", "regulatory", "geopolitical", "pandemic", "cyber_attack"],
+          "enum": [
+            "natural_disaster",
+            "market_shock",
+            "infrastructure_failure",
+            "regulatory",
+            "geopolitical",
+            "pandemic",
+            "cyber_attack"
+          ],
           "description": "Event type classification"
         },
         "trigger": {
@@ -199,6 +371,10 @@
             "type": "string"
           },
           "description": "IDs of events triggered by this event"
+        },
+        "substitution_ref": {
+          "type": "string",
+          "description": "Reference to a substitution activated or represented by this event"
         },
         "reference": {
           "type": "string",

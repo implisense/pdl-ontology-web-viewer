@@ -276,6 +276,94 @@ describe('PDL to RDF Converter', () => {
     });
   });
 
+
+  describe('Substitutions (PDL v1.1)', () => {
+    const pdlWithSubstitution = {
+      ...samplePdl,
+      supply_chains: [
+        {
+          ...samplePdl.supply_chains[0],
+          dependencies: [
+            {
+              ...samplePdl.supply_chains[0].dependencies[0],
+              substitution_ref: 'sub_1'
+            }
+          ]
+        }
+      ],
+      events: samplePdl.events.map((event, index) =>
+        index === 1 ? { ...event, substitution_ref: 'sub_1' } : event
+      ),
+      substitutions: [
+        {
+          id: 'sub_1',
+          from: 'commodity_1',
+          to: 'service_1',
+          type: 'product',
+          direction: 'demand',
+          coverage: 0.4,
+          quality_delta: -0.1,
+          cost_delta: 0.2,
+          ramp_up: '14d',
+          duration_max: '60d',
+          reversible: true,
+          activation: {
+            trigger: 'price_spike_1.active',
+            threshold: {
+              price_increase: 0.25,
+              duration_min: '7d'
+            }
+          },
+          side_effects: [
+            {
+              type: 'price_pressure',
+              target: 'service_1',
+              magnitude: 0.15,
+              description: 'Higher demand drives price.'
+            }
+          ],
+          dependency_overlap: ['commodity_1'],
+          reference: 'Test substitution reference'
+        }
+      ]
+    };
+
+    it('should emit Substitution instances', () => {
+      const turtle = convertToTurtle(pdlWithSubstitution);
+      assert.match(turtle, /pdlr:substitution_sub_1 a pdl:Substitution/);
+      assert.match(turtle, /pdl:substitutionFor pdlr:entity_commodity_1/);
+      assert.match(turtle, /pdl:substitutionBy pdlr:entity_service_1/);
+      assert.match(turtle, /pdl:substitutionTypeRef pdl:SubstitutionType_product/);
+      assert.match(turtle, /pdl:substitutionDirectionRef pdl:SubstitutionDirection_demand/);
+    });
+
+    it('should emit substitution quantitative properties', () => {
+      const turtle = convertToTurtle(pdlWithSubstitution);
+      assert.match(turtle, /pdl:coverage "0\.4"\^\^xsd:decimal/);
+      assert.match(turtle, /pdl:qualityDelta "-0\.1"\^\^xsd:decimal/);
+      assert.match(turtle, /pdl:costDelta "0\.2"\^\^xsd:decimal/);
+      assert.match(turtle, /pdl:rampUp "14d"/);
+      assert.match(turtle, /pdl:durationMax "60d"/);
+    });
+
+    it('should emit activation condition and thresholds', () => {
+      const turtle = convertToTurtle(pdlWithSubstitution);
+      assert.match(turtle, /pdlr:activation_sub_1 a pdl:ActivationCondition/);
+      assert.match(turtle, /pdl:activationTrigger "price_spike_1\.active"/);
+      assert.match(turtle, /pdl:activationEvent pdlr:event_price_spike_1/);
+      assert.match(turtle, /pdl:activationThresholdPriceIncrease "0\.25"\^\^xsd:decimal/);
+      assert.match(turtle, /pdl:activationThresholdDurationMin "7d"/);
+    });
+
+    it('should emit side effects and substitution references', () => {
+      const turtle = convertToTurtle(pdlWithSubstitution);
+      assert.match(turtle, /pdlr:sideeffect_sub_1_1 a pdl:SubstitutionSideEffect/);
+      assert.match(turtle, /pdl:sideEffectTypeRef pdl:SideEffectType_price_pressure/);
+      assert.match(turtle, /pdl:sideEffectTarget pdlr:entity_service_1/);
+      assert.match(turtle, /pdl:substitutionRef pdlr:substitution_sub_1/);
+    });
+  });
+
   describe('Mapping Constants', () => {
     it('should have correct entity type to CoyPu mappings', () => {
       assert.strictEqual(ENTITY_TYPE_TO_COYPU.manufacturer, 'coy:Company');

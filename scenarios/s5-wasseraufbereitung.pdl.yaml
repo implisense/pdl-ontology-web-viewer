@@ -235,6 +235,16 @@ supply_chains:
         to: electricity_grid
         type: energy
         criticality: medium
+      - from: chlorine_import_eu
+        to: chlorine_supply
+        type: substitution
+        substitution_ref: sub_chlorine_import_eu
+        criticality: medium
+      - from: large_utilities
+        to: chlorine_supply
+        type: substitution
+        substitution_ref: sub_uv_ozon_technology
+        criticality: low
 
   # Natronlauge-Kette
   - id: sodium_hydroxide_chain
@@ -274,6 +284,11 @@ supply_chains:
         to: medium_utilities
         type: input
         criticality: high
+      - from: thw_water_emergency
+        to: small_rural_utilities
+        type: substitution
+        substitution_ref: sub_thw_emergency_buffer
+        criticality: low
 
   # Feedback-Schleifen (Rückkopplungseffekte)
   - id: feedback_loops_chain
@@ -291,6 +306,61 @@ supply_chains:
         to: pharma_industry
         type: input
         criticality: high
+
+# =============================================================================
+# Substitutions
+# =============================================================================
+substitutions:
+
+  - id: sub_uv_ozon_technology
+    from: chlorine_supply
+    to: large_utilities
+    type: technology
+    coverage: 0.40
+    quality_delta: 0.0
+    cost_delta: 0.50
+    ramp_up: 60d
+    activation:
+      trigger: "chlorine_delivery_stop.active"
+    reversible: false
+    side_effects: []
+    dependency_overlap: []
+    reference: "Große Versorger (>100.000 Einw.) können auf UV/Ozon/Vor-Ort-Elektrolyse umstellen; entspricht ~40% des Wasservolumens. Investitionskosten hoch, aber technisch erprobt (DVGW W 625)."
+
+  - id: sub_chlorine_import_eu
+    from: chlorine_supply
+    to: chlorine_import_eu
+    type: supplier
+    coverage: 0.35
+    quality_delta: 0.0
+    cost_delta: 0.30
+    ramp_up: 14d
+    activation:
+      trigger: "chlorine_delivery_stop.active"
+    reversible: true
+    side_effects:
+      - type: correlated_risk
+        target: chlorine_import_eu
+        description: "EU-weiter Gaspreis-/Strompreisschock trifft alle Chlor-Alkali-Produzenten (NL/BE/FR) gleichzeitig; Substitution verliert bei System-Krise an Wirksamkeit."
+    dependency_overlap:
+      - electricity_grid
+    reference: "Nouryon Delfzijl (NL), INOVYN Jemeppe (BE), Kem One Lavera (FR) decken zusammen ca. 30-40% des deutschen Chlorbedarfs; Gefahrgut-Transport (ADR Klasse 2.3) begrenzt kurzfristige Kapazitätserweiterung."
+
+  - id: sub_thw_emergency_buffer
+    from: small_rural_utilities
+    to: thw_water_emergency
+    type: buffer
+    coverage: 0.05
+    quality_delta: 0.0
+    cost_delta: 0.0
+    ramp_up: 24h
+    duration_max: 30d
+    activation:
+      trigger: "boil_water_advisory.active"
+    reversible: false
+    side_effects: []
+    dependency_overlap: []
+    reference: "THW betreibt ca. 40 Trinkwasseraufbereitungsanlagen (TWA) bundesweit; Einsatzbereitschaft 24-48h; Kapazität reicht nur für kritische Bevölkerungsgruppen (Krankenhäuser, Dialyse, Notunterkünfte)."
 
 # =============================================================================
 # Events
@@ -342,6 +412,9 @@ events:
       - large_utility_shortage
       - pharma_production_halt
       - chlorine_import_activated
+    substitution_ref:
+      - sub_chlorine_import_eu
+      - sub_uv_ozon_technology
     reference: "Chlor nur begrenzt lagerfähig (Gefahrgut); EU-Importe mildern auf -60%"
 
   # Wasserversorger-Engpässe
@@ -399,6 +472,8 @@ events:
       duration: 30d
     causes:
       - emergency_water_activation
+    substitution_ref:
+      - sub_thw_emergency_buffer
     reference: "Erste Abkochgebote ab Tag 5"
 
   - id: water_contamination

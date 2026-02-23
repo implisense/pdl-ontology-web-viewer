@@ -199,6 +199,16 @@ supply_chains:
         to: feed_mills
         type: input
         criticality: medium
+      - from: alternative_protein_sources
+        to: feed_mills
+        type: substitution
+        substitution_ref: sub_protein_replacement
+        criticality: medium
+      - from: strategic_feed_reserves
+        to: feed_mills
+        type: substitution
+        substitution_ref: sub_strategic_reserves
+        criticality: low
 
   - id: soy_to_eu_secondary
     name: "Soja-Nebenlieferkette Paranaguá"
@@ -243,6 +253,158 @@ supply_chains:
         type: demand
         criticality: medium
         note: "Fleischsubstitution reduziert Nachfrage"
+
+substitutions:
+
+  # Produktsubstitution: Sojaschrot → alternative Proteinquellen
+  - id: sub_protein_replacement
+    from: eu_oil_mills
+    to: alternative_protein_sources
+    type: product
+
+    coverage: 0.20              # Max. 20% des Sojaschrot-Bedarfs ersetzbar
+    quality_delta: -0.12        # ~12% geringerer Proteingehalt (Raps: 34% vs. Soja: 44%)
+    cost_delta: 0.30            # +30% Mehrkosten bei Preisspitze
+    ramp_up: 21d                # Rezepturumstellung in Futtermittelwerken
+
+    activation:
+      trigger: "feed_price_spike.active"
+      threshold:
+        price_increase: 0.25
+
+    reversible: true
+
+    side_effects:
+      - type: price_pressure
+        target: alternative_protein_sources
+        magnitude: 0.20
+        description: "Mehrnachfrage nach Rapsschrot treibt dessen Preis"
+      - type: quality_loss
+        target: poultry_farms
+        magnitude: -0.05
+        description: "Geflügel reagiert sensibler auf Proteingehalt als Schweine"
+
+    dependency_overlap:
+      - fertilizer_supply       # Raps/Sonnenblume brauchen denselben Dünger
+      - gas_supply              # Trocknung der Ölsaaten ebenfalls gasabhängig
+
+    reference: "UFOP 2022: Rapsschrot-Substitutionspotenzial ~15-20% bei Sojapreisschocks"
+
+  # Lieferantensubstitution: Brasilien → Argentinien
+  - id: sub_supplier_argentina
+    from: brazil_farms
+    to: argentina_farms
+    type: supplier
+
+    coverage: 0.15
+    quality_delta: 0.0          # Gleiche Qualität (GM-Soja, ähnlicher Standard)
+    cost_delta: 0.15
+    ramp_up: 14d                # Sofortige Umleitung von Handelsströmen möglich
+
+    activation:
+      trigger: "soy_export_reduction.active"
+
+    reversible: true
+
+    side_effects:
+      - type: correlated_risk
+        description: "Bei gleichzeitiger La-Niña-Dürre auch AR betroffen (2021/22 tatsächlich eingetreten)"
+
+    dependency_overlap:
+      - fertilizer_supply       # Argentinische Betriebe ebenfalls düngemittelabhängig
+
+    reference: "USDA GATS 2022: Argentinien kompensiert BR-Ausfälle teilweise, korreliertes Klimarisiko"
+
+  # Lieferantensubstitution: Brasilien → USA (Notfall)
+  - id: sub_supplier_usa
+    from: brazil_farms
+    to: us_farms
+    type: supplier
+
+    coverage: 0.25
+    quality_delta: 0.0
+    cost_delta: 0.25            # Längere Route, höhere Frachtkosten
+    ramp_up: 30d                # Handelsverträge + Verschiffungsplanung
+
+    activation:
+      trigger: "soy_export_reduction.active"
+      threshold:
+        duration_min: 30d       # Erst nach 30 Tagen anhaltender Störung
+
+    reversible: true
+    side_effects: []
+    dependency_overlap: []      # USA hat unabhängiges Klimarisiko → echte Diversifikation
+
+    reference: "USA größter Soja-Exporteur weltweit, Golfhäfen für EU-Verschiffung geeignet"
+
+  # Routensubstitution: Santos → Paranaguá
+  - id: sub_route_paranagua
+    from: santos_port
+    to: paranagua_port
+    type: route
+
+    coverage: 0.35
+    quality_delta: 0.0
+    cost_delta: 0.08
+    ramp_up: 7d                 # Reedereien können schnell umplanen
+
+    activation:
+      trigger: "port_congestion.active"
+
+    reversible: true
+    side_effects: []
+
+    reference: "Paranaguá: zweitgrößter brasilianischer Soja-Exporthafen"
+
+  # Nachfrageseitige Substitution: Fleisch → Pflanzlich
+  - id: sub_consumer_plant_based
+    from: food_retail
+    to: consumers
+    type: product
+    direction: demand
+
+    coverage: 0.08
+    quality_delta: 0.0
+    cost_delta: 0.0
+    ramp_up: 14d
+
+    activation:
+      trigger: "consumer_price_increase.active"
+      threshold:
+        price_increase: 0.15
+
+    reversible: true
+
+    side_effects:
+      - type: demand_reduction
+        target: feed_mills
+        magnitude: -0.12
+        description: "Weniger Fleisch → weniger Futtermittelnachfrage"
+
+    reference: "DGE 2022: Fleischkonsum DE -4,2%, bei stärkeren Preissteigerungen bis -8%"
+
+  # Puffersubstitution: Strategische Lagerbestände
+  - id: sub_strategic_reserves
+    from: strategic_feed_reserves
+    to: feed_mills
+    type: buffer
+
+    coverage: 0.12
+    quality_delta: 0.0
+    cost_delta: 0.0
+    ramp_up: 3d
+    duration_max: 45d
+
+    activation:
+      trigger: "feed_price_spike.active"
+
+    reversible: false
+
+    side_effects:
+      - type: depletion
+        description: "Nach Nutzung: Lager müssen zu erhöhten Preisen wiederbefüllt werden"
+
+    reference: "Typische Lagerreichweite EU-Futtermittelindustrie 30-45 Tage"
 
 events:
   - id: brazil_drought
@@ -377,6 +539,7 @@ events:
       supply: "+8%"
       price: "+30%"
       duration: 120d
+    substitution_ref: sub_protein_replacement
     reference: "Rapsschrot/Sonnenblumenschrot-Substitution bei Sojapreisschocks, ~20% Potenzial"
 
   - id: reserve_release
@@ -388,6 +551,7 @@ events:
     impact:
       supply: "+12%"
       duration: 45d
+    substitution_ref: sub_strategic_reserves
     reference: "Futtermittellager bei Ölmühlen und Mischfutterherstellern ~30-45 Tage Reichweite"
 
   - id: port_route_shift
@@ -399,6 +563,7 @@ events:
     impact:
       supply: "-5%"
       duration: 30d
+    substitution_ref: sub_route_paranagua
     reference: "Verlagerung Santos → Paranaguá/Hamburg bei Hafenstau"
 
   - id: argentina_supply_increase
@@ -411,6 +576,7 @@ events:
       supply: "+10%"
       price: "+15%"
       duration: 90d
+    substitution_ref: sub_supplier_argentina
     reference: "Argentinien kompensiert teilweise bei Brasilienausfällen (außer bei eigener Dürre)"
 
   - id: us_supply_activated
@@ -423,6 +589,7 @@ events:
       supply: "+15%"
       price: "+25%"
       duration: 120d
+    substitution_ref: sub_supplier_usa
     reference: "USA größter Soja-Exporteur, Umleitung über Golfhäfen nach EU möglich"
 
   - id: soy_oil_shortage
@@ -449,6 +616,7 @@ events:
       demand: "-8%"
       duration: 180d
     causes: [feed_demand_reduction]
+    substitution_ref: sub_consumer_plant_based
     reference: "Fleischkonsum DE 2022: -4,2% (DGE), Substitution zu pflanzlichen Alternativen"
 
   - id: feed_demand_reduction

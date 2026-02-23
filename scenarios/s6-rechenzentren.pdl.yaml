@@ -351,11 +351,18 @@ supply_chains:
         criticality: high
       - from: cloud_hyperscaler
         to: power_grid_frankfurt
-        type: energy
+        type: substitution
+        substitution_ref: sub_cloud_hyperscaler_failover
         criticality: medium
       - from: cdn_edge_cache
         to: decix_frankfurt
-        type: data
+        type: substitution
+        substitution_ref: sub_cdn_edge_cache
+        criticality: medium
+      - from: mobile_basestation_batteries
+        to: network_carriers
+        type: substitution
+        substitution_ref: sub_mobile_basestation_batteries
         criticality: medium
 
   # Endverbraucher
@@ -383,6 +390,88 @@ supply_chains:
         to: voip_systems
         type: coordination
         criticality: high
+
+# =============================================================================
+# Substitutions
+# =============================================================================
+substitutions:
+
+  # Substitution 1: Geografische Substitution -- Lokale RZ → Cloud-Hyperscaler Failover
+  - id: sub_cloud_hyperscaler_failover
+    from: decix_frankfurt
+    to: cloud_hyperscaler
+    type: route
+
+    coverage: 0.60
+    quality_delta: -0.10
+    cost_delta: 0.40
+    ramp_up: 4h
+
+    activation:
+      trigger: "regional_blackout.active"
+
+    reversible: true
+
+    side_effects:
+      - type: latency_increase
+        target: ozg_services
+        description: "Latenz +20-40ms durch Dublin-/Irland-Routing (AWS eu-west-1 / Azure North Europe)"
+      - type: latency_increase
+        target: payment_systems
+        description: "Latenz +20-40ms für SEPA/Kartenzahlungen durch Auslandsrouting"
+
+    dependency_overlap: []
+
+    reference: "AWS eu-west-1 (Irland) und Azure North Europe (Dublin) übernehmen bis zu 60% der Last"
+
+  # Substitution 2: Puffersubstitution -- CDN Edge Caches
+  - id: sub_cdn_edge_cache
+    from: decix_frankfurt
+    to: cdn_edge_cache
+    type: buffer
+
+    coverage: 0.30
+    quality_delta: -0.20
+    cost_delta: 0.0
+    ramp_up: 0d
+    duration_max: 12h
+
+    activation:
+      trigger: "datacenter_shutdown_decix.active"
+
+    reversible: true
+
+    side_effects: []
+
+    dependency_overlap: []
+
+    reference: "Cloudflare/Akamai Edge Caches liefern statische Inhalte (~30% des Traffics) bis zu 12h"
+
+  # Substitution 3: Puffersubstitution -- Mobilfunk-Batteriepuffer
+  - id: sub_mobile_basestation_batteries
+    from: network_carriers
+    to: mobile_basestation_batteries
+    type: buffer
+
+    coverage: 0.20
+    quality_delta: -0.30
+    cost_delta: 0.0
+    ramp_up: 0d
+    duration_max: 6h
+
+    activation:
+      trigger: "regional_blackout.active"
+
+    reversible: false
+
+    side_effects:
+      - type: capacity_loss
+        target: mobile_backend
+        description: "Nach 4-8h Batteriebetrieb fallen Mobilfunkmasten aus; eingeschränkte Bandbreite während Pufferbetrieb"
+
+    dependency_overlap: []
+
+    reference: "Mobilfunk-Basisstationen mit 4-8h Akkupuffer decken ~20% der kritischen Kommunikation"
 
 # =============================================================================
 # Events
@@ -693,6 +782,7 @@ events:
   - id: cloud_failover_activated
     name: Cloud-Failover auf Auslandsregionen aktiviert
     type: infrastructure_failure
+    substitution_ref: sub_cloud_hyperscaler_failover
     trigger:
       target: cloud_hyperscaler
       condition: "regional_blackout.active"
@@ -718,6 +808,7 @@ events:
   - id: basestation_batteries_depleted
     name: Mobilfunk-Batterien erschöpft
     type: infrastructure_failure
+    substitution_ref: sub_mobile_basestation_batteries
     trigger:
       target: mobile_basestation_batteries
       condition: "regional_blackout.active"
@@ -731,6 +822,7 @@ events:
   - id: cdn_cache_expires
     name: CDN-Caches abgelaufen
     type: infrastructure_failure
+    substitution_ref: sub_cdn_edge_cache
     trigger:
       target: cdn_edge_cache
       condition: "datacenter_shutdown_decix.active"

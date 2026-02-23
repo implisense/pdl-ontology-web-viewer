@@ -304,11 +304,49 @@ supply_chains:
         type: input
         criticality: medium
         note: "Umqualifikation auf alternative Foundries dauert 6-18 Monate"
+      - from: alternative_fabs
+        to: tsmc_taiwan
+        type: substitution
+        substitution_ref: sub_tsmc_alternative_fabs
+        criticality: medium
+        note: "Lieferantensubstitution: Samsung, Intel Foundry, UMC ersetzen TSMC partiell"
       - from: zulieferer_cluster
         to: automotive_consumers
         type: demand
         criticality: high
         note: "Nachfragerückgang reduziert Auftragsbestand"
+
+# =============================================================================
+# Substitutions
+# =============================================================================
+substitutions:
+
+  - id: sub_tsmc_alternative_fabs
+    from: tsmc_taiwan
+    to: alternative_fabs
+    type: supplier
+
+    coverage: 0.45        # Max. ersetzbarer Anteil (technisch möglich, qualifikationsabhängig)
+    quality_delta: 0.0    # Gleiche Qualität nach erfolgreicher Automotive-Zertifizierung
+    cost_delta: 0.15      # 15% Mehrkosten durch Umqualifikation und geringere Skaleneffekte
+    ramp_up: 540d         # 6-18 Monate Umqualifikation für Automotive-Zertifizierung
+
+    activation:
+      trigger: "tsmc_production_halt.active"
+      threshold:
+        supply_drop: 0.50  # Substitution greift ab 50% TSMC-Ausfall
+
+    reversible: false      # Qualifikation ist langfristig; kein einfaches Zurückwechseln
+
+    side_effects:
+      - type: capacity_loss
+        target: alternative_fabs
+        magnitude: 0.30
+        description: "Während der Umqualifikationsphase nur ~70% der Zielkapazität erreichbar"
+
+    dependency_overlap: []  # Samsung/Intel Foundry haben keine Taiwan-Abhängigkeit — echte Diversifikation
+
+    reference: "Chipkrise 2021: Automotive-Umqualifikation auf Samsung/UMC dauerte 12-18 Monate; IPC-7711/7721, IATF 16949"
 
 # =============================================================================
 # Events
@@ -546,6 +584,7 @@ events:
   - id: alternative_sourcing_activated
     name: Alternative Foundries aktiviert
     type: market_shock
+    substitution_ref: sub_tsmc_alternative_fabs
     trigger:
       target: alternative_fabs
       condition: "tsmc_production_halt.active"

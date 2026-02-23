@@ -219,6 +219,12 @@ supply_chains:
         to: pharma_grosshandel
         type: input
         criticality: high
+      - from: antibiotics_api
+        to: antibiotics_api
+        type: substitution
+        substitution_ref: sub_antibiotic_product
+        criticality: medium
+        note: "Produktsubstitution: Amoxicillin→Ampicillin / Ciprofloxacin→Levofloxacin (60% Coverage, 7d Ramp-up, Resistenzrisiko)"
 
   # Schmerzmittel-Kette
   - id: painkiller_chain
@@ -265,6 +271,18 @@ supply_chains:
         type: input
         criticality: high
         note: "Indien selbst zu ~70% von chinesischen Intermediaten abhängig"
+      - from: india_alternative_sourcing
+        to: china_api_producers
+        type: substitution
+        substitution_ref: sub_india_sourcing
+        criticality: medium
+        note: "Lieferantensubstitution: China-API-Produzenten → Indien (30% Coverage, +60% Kosten, 60d Ramp-up)"
+      - from: eu_api_production
+        to: china_api_producers
+        type: substitution
+        substitution_ref: sub_eu_production_rampup
+        criticality: low
+        note: "EU-Eigenproduktions-Ramp-up als langfristige Lieferantensubstitution (15% Coverage, 270d Ramp-up)"
 
   # Feedback-Kette
   - id: feedback_loops_chain
@@ -278,6 +296,69 @@ supply_chains:
         type: demand
         criticality: medium
         note: "Rationierung ändert Nachfragemuster"
+
+# =============================================================================
+# Substitutions
+# =============================================================================
+substitutions:
+
+  - id: sub_india_sourcing
+    from: china_api_producers
+    to: india_alternative_sourcing
+    type: supplier
+    coverage: 0.30
+    quality_delta: 0.0
+    cost_delta: 0.60
+    ramp_up: 60d
+    activation:
+      trigger: "antibiotics_api_shortage.active"
+      threshold:
+        supply_drop: 0.50
+    reversible: true
+    side_effects:
+      - type: correlated_risk
+        target: india_api_producers
+        magnitude: 0.60
+        description: "Indien bezieht ~70% seiner Pharma-Intermediate aus China — Pseudo-Diversifikation, da Indien selbst vulnerabel gegenüber China-Ausfällen"
+    dependency_overlap:
+      - china_intermediates
+    reference: "Indien als alternativer API-Lieferant: Lead-Time +60%, aber strukturelle Abhängigkeit von chinesischen Intermediaten (6-APA, Clavulansäure)"
+
+  - id: sub_antibiotic_product
+    from: antibiotics_api
+    to: antibiotics_api
+    type: product
+    coverage: 0.60
+    quality_delta: -0.10
+    cost_delta: 0.10
+    ramp_up: 7d
+    activation:
+      trigger: "apotheken_rationierung.active"
+      threshold:
+        supply_drop: 0.30
+    reversible: true
+    side_effects:
+      - type: resistance_risk
+        target: patients
+        magnitude: 0.20
+        description: "Kreuzresistenz durch Breitspektrum-Antibiotika-Substitution (Amoxicillin→Ampicillin, Ciprofloxacin→Levofloxacin) — fördert Resistenzentwicklung bei ~20% der Fälle"
+    reference: "Amoxicillin→Ampicillin, Ciprofloxacin→Levofloxacin: therapeutisch austauschbar für ~60% der Fälle; Resistenzrisiko durch unkontrollierten Breitspektrum-Einsatz"
+
+  - id: sub_eu_production_rampup
+    from: china_api_producers
+    to: eu_api_production
+    type: supplier
+    coverage: 0.15
+    quality_delta: 0.0
+    cost_delta: 0.40
+    ramp_up: 270d
+    activation:
+      trigger: "eu_production_rampup.active"
+      threshold:
+        duration_min: 60d
+    reversible: false
+    side_effects: []
+    reference: "EU-API-Eigenproduktion (Sandoz Kundl AT, IPCEI Health): struktureller Ramp-up 8-12 Monate bis erste Kapazitäten, mehrere Jahre bis volle Kapazität — nicht reversibel (strategische Investitionsentscheidung)"
 
 # =============================================================================
 # Events
@@ -344,6 +425,7 @@ events:
   - id: antibiotics_api_shortage
     name: Antibiotika-Wirkstoffmangel
     type: infrastructure_failure
+    substitution_ref: sub_india_sourcing
     trigger:
       target: antibiotics_api
       condition: "intermediate_shortage.active OR india_supply_disruption.active"
@@ -413,6 +495,7 @@ events:
   - id: apotheken_rationierung
     name: Apotheken-Rationierung
     type: infrastructure_failure
+    substitution_ref: sub_antibiotic_product
     trigger:
       target: apotheken
       condition: "grosshandel_shortage.active"
@@ -527,6 +610,7 @@ events:
   - id: eu_production_rampup
     name: EU-API-Produktion hochgefahren
     type: regulatory
+    substitution_ref: sub_eu_production_rampup
     trigger:
       target: eu_api_production
       condition: "antibiotics_api_shortage.active AND antibiotics_api_shortage.duration > 60d"
