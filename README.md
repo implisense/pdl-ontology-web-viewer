@@ -124,7 +124,7 @@ Der Browser-Frontend und die Node.js-Tools teilen keine Laufzeit — keine Build
 
 ## Projektkontext
 
-Der PDL-Viewer ist Teil des BMFTR-geförderten Verbundprojekts **PROVIDER** — *Proaktive Versorgungssicherheit durch dynamische Simulation mit selbstlernenden LLM-Agenten*. Koordiniert von [OFFIS e.V.](https://www.offis.de), Verwertungspartner [Implisense](https://www.implisense.com).
+Der PDL-Viewer ist Teil des BMFTR-geförderten Verbundprojekts **PROVIDER** — *Proaktive Versorgungssicherheit durch dynamische Simulation mit selbstlernenden LLM-Agenten*. Koordiniert von [OFFIS e.V.](https://www.offis.de), Subauftragnehmer [Implisense](https://www.implisense.com).
 
 ---
 
