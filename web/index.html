@@ -46,6 +46,7 @@
     <div class="tabs">
       <button id="tabGraph" class="tab active" type="button">Graph</button>
       <button id="tabYaml" class="tab" type="button">YAML Viewer</button>
+      <button id="tabOntology" class="tab" type="button">Ontologie</button>
       <button id="tabAbout" class="tab" type="button">About</button>
     </div>
     <div class="topbar-right">
@@ -335,6 +336,53 @@
             <h3>Impact-Felder</h3>
             <ul id="ontologyImpactStats" class="ontology-stats"></ul>
           </div>
+        </section>
+      </aside>
+    </div>
+  </div>
+
+  <div id="ontologyView" class="view">
+    <div class="onto-layout">
+      <aside class="panel panel-left onto-sidebar">
+        <section class="card">
+          <h2>Filter</h2>
+          <div class="onto-filter-group">
+            <button class="onto-filter active" data-filter="all" type="button">Alle</button>
+            <button class="onto-filter" data-filter="coypu" type="button">Nur CoyPu</button>
+            <button class="onto-filter" data-filter="inherited" type="button">PDL geerbt</button>
+            <button class="onto-filter" data-filter="new" type="button">PDL-Erweiterungen</button>
+          </div>
+        </section>
+        <section class="card">
+          <h2>Statistik</h2>
+          <ul id="ontoStats" class="ontology-stats"></ul>
+        </section>
+        <section class="card">
+          <h2>Legende</h2>
+          <ul class="ontology-stats">
+            <li><span class="onto-dot onto-dot-coypu"></span> CoyPu-Basisklassen</li>
+            <li><span class="onto-dot onto-dot-inherited"></span> PDL geerbt (subClassOf)</li>
+            <li><span class="onto-dot onto-dot-equiv"></span> PDL equivalentClass</li>
+            <li><span class="onto-dot onto-dot-new"></span> PDL-Neuerungen</li>
+            <li><span class="onto-dot onto-dot-enum"></span> PDL-Enumerationen</li>
+          </ul>
+        </section>
+      </aside>
+      <main class="onto-canvas">
+        <div id="ontoSubTabs" class="onto-sub-tabs">
+          <button id="ontoTabGraph" class="onto-sub-tab active" type="button">Graph</button>
+          <button id="ontoTabCards" class="onto-sub-tab" type="button">Klassen</button>
+        </div>
+        <div id="ontoNetwork" aria-label="Ontologie-Graph"></div>
+        <div id="ontoCardsView" class="onto-cards-view" style="display:none">
+          <div id="ontoCardsGrid" class="onto-cards-grid"></div>
+        </div>
+      </main>
+      <aside class="panel panel-right onto-details-panel">
+        <section class="card" id="ontoDetailsCard">
+          <h2>Details</h2>
+          <p class="muted" id="ontoDetailsEmpty">Klasse anklicken…</p>
+          <div id="ontoDetailsContent" class="onto-details-content" style="display:none"></div>
         </section>
       </aside>
     </div>

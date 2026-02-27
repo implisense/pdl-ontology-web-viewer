@@ -54,7 +54,9 @@ const state = {
     zoomRaf: null,
     layoutRaf: null,
     renderedNodeIds: new Set(),
-    renderedEdgeIds: new Set()
+    renderedEdgeIds: new Set(),
+    ontologyInitialized: false,
+    ontoCardsInitialized: false
   }
 };
 
@@ -87,6 +89,54 @@ const edgeColors = {
   affects: "#22c55e"
 };
 
+// ── Ontologie-Daten (statisch, aus pdl-ontology.ttl extrahiert) ──────────────
+const ONTOLOGY_DATA = {
+  coypu: [
+    { id: "coy:Company",             label: "coy:Company",             comment: "Unternehmen / Produzent" },
+    { id: "coy:Commodity",           label: "coy:Commodity",           comment: "Rohstoff / Produkt" },
+    { id: "coy:Infrastructure",      label: "coy:Infrastructure",      comment: "Infrastruktur-Objekt" },
+    { id: "coy:Region",              label: "coy:Region",              comment: "Geographische Region" },
+    { id: "coy:Event",               label: "coy:Event",               comment: "Ereignis" },
+    { id: "coy:Disaster",            label: "coy:Disaster",            comment: "Naturkatastrophe / Störung" },
+    { id: "coy:SocioPoliticalEvent", label: "coy:SocioPoliticalEvent", comment: "Geopolitisches Ereignis" },
+    { id: "coy:SupplyChainObject",   label: "coy:SupplyChainObject",   comment: "Lieferketten-Objekt (Basis)" }
+  ],
+  pdl_inherited: [
+    { id: "pdl:Manufacturer",         label: "pdl:Manufacturer",         parent: "coy:Company",           rel: "subClassOf",      comment: "Produzent / Hersteller im PDL-Szenario" },
+    { id: "pdl:Commodity",            label: "pdl:Commodity",            parent: "coy:Commodity",          rel: "subClassOf",      comment: "Rohstoff oder Vorprodukt" },
+    { id: "pdl:Infrastructure",       label: "pdl:Infrastructure",       parent: "coy:Infrastructure",     rel: "subClassOf",      comment: "Physische Infrastruktur" },
+    { id: "pdl:Region",               label: "pdl:Region",               parent: "coy:Region",             rel: "subClassOf",      comment: "Region im Lieferkettennetzwerk" },
+    { id: "pdl:Event",                label: "pdl:Event",                parent: "coy:Event",              rel: "equivalentClass", comment: "PDL-Ereignis (äquivalent zu coy:Event)" },
+    { id: "pdl:Event_NaturalDisaster",label: "pdl:Event_NaturalDisaster",parent: "coy:Disaster",           rel: "subClassOf",      comment: "Naturkatastrophe" },
+    { id: "pdl:Event_Geopolitical",   label: "pdl:Event_Geopolitical",   parent: "coy:SocioPoliticalEvent",rel: "subClassOf",      comment: "Geopolitisches Ereignis" },
+    { id: "pdl:Substitution",         label: "pdl:Substitution",         parent: "coy:SupplyChainObject",  rel: "subClassOf",      comment: "Substituierungsstrategie (v1.1)" }
+  ],
+  pdl_new: [
+    { id: "pdl:Scenario",                   label: "pdl:Scenario",                   comment: "Container für Disruptionsszenarien" },
+    { id: "pdl:Entity",                     label: "pdl:Entity",                     comment: "Basis aller Netzknoten" },
+    { id: "pdl:Service",                    label: "pdl:Service",                    comment: "Dienstleistung im Netzwerk" },
+    { id: "pdl:SupplyChain",                label: "pdl:SupplyChain",                comment: "Lieferkette mit Stufen und Abhängigkeiten" },
+    { id: "pdl:SupplyChainConnection",      label: "pdl:SupplyChainConnection",      comment: "Verbindung zwischen Lieferketten" },
+    { id: "pdl:Dependency",                 label: "pdl:Dependency",                 comment: "Abhängigkeit zwischen Entitäten" },
+    { id: "pdl:Cascade",                    label: "pdl:Cascade",                    comment: "Kaskaden-Effekt mit Zeitlinie" },
+    { id: "pdl:TimelineEntry",              label: "pdl:TimelineEntry",              comment: "Zeitlinieneintrag in einer Kaskade" },
+    { id: "pdl:Event_MarketShock",          label: "pdl:Event_MarketShock",          comment: "Marktschock / Preisstoß" },
+    { id: "pdl:Event_InfrastructureFailure",label: "pdl:Event_InfrastructureFailure",comment: "Infrastrukturausfall" },
+    { id: "pdl:Event_Regulatory",           label: "pdl:Event_Regulatory",           comment: "Regulatorisches Ereignis" },
+    { id: "pdl:Event_Pandemic",             label: "pdl:Event_Pandemic",             comment: "Pandemie / Gesundheitskrise" },
+    { id: "pdl:Event_CyberAttack",          label: "pdl:Event_CyberAttack",          comment: "Cyberangriff" },
+    { id: "pdl:ActivationCondition",        label: "pdl:ActivationCondition",        comment: "Aktivierungsbedingung für Substitution" },
+    { id: "pdl:SubstitutionSideEffect",     label: "pdl:SubstitutionSideEffect",     comment: "Nebeneffekt einer Substitution" }
+  ],
+  pdl_enum: [
+    { id: "pdl:SubstitutionType",      label: "pdl:SubstitutionType",      values: ["product","supplier","route","technology","buffer","mode"] },
+    { id: "pdl:SubstitutionDirection", label: "pdl:SubstitutionDirection", values: ["supply","demand"] },
+    { id: "pdl:Criticality",           label: "pdl:Criticality",           values: ["high","medium","low"] },
+    { id: "pdl:Severity",              label: "pdl:Severity",              values: ["critical","high","medium","low"] },
+    { id: "pdl:DependencyType",        label: "pdl:DependencyType",        values: ["energy","input","logistics","data","substitution","demand"] }
+  ]
+};
+
 const pathHighlightPalette = {
   background: "#e0e7ff",
   border: "#4338ca",
@@ -106,9 +156,15 @@ const elements = {
   fileLabel: document.getElementById("fileLabel"),
   tabGraph: document.getElementById("tabGraph"),
   tabYaml: document.getElementById("tabYaml"),
+  tabOntology: document.getElementById("tabOntology"),
   tabAbout: document.getElementById("tabAbout"),
   graphView: document.getElementById("graphView"),
   yamlView: document.getElementById("yamlView"),
+  ontologyView: document.getElementById("ontologyView"),
+  ontoTabGraph: document.getElementById("ontoTabGraph"),
+  ontoTabCards: document.getElementById("ontoTabCards"),
+  ontoCardsView: document.getElementById("ontoCardsView"),
+  ontoCardsGrid: document.getElementById("ontoCardsGrid"),
   aboutView: document.getElementById("aboutView"),
   yamlTree: document.getElementById("yamlTree"),
   yamlStatus: document.getElementById("yamlStatus"),
@@ -1606,16 +1662,387 @@ function exportPng() {
 function setActiveTab(tab) {
   const isGraph = tab === "graph";
   const isYaml = tab === "yaml";
+  const isOntology = tab === "ontology";
   const isAbout = tab === "about";
 
   elements.graphView.classList.toggle("active", isGraph);
   elements.yamlView.classList.toggle("active", isYaml);
+  elements.ontologyView.classList.toggle("active", isOntology);
   elements.aboutView.classList.toggle("active", isAbout);
 
   elements.tabGraph.classList.toggle("active", isGraph);
   elements.tabYaml.classList.toggle("active", isYaml);
+  elements.tabOntology.classList.toggle("active", isOntology);
   elements.tabAbout.classList.toggle("active", isAbout);
+
+  if (isOntology && !state.uiState.ontologyInitialized) {
+    initOntologyTab();
+    state.uiState.ontologyInitialized = true;
+  }
 }
+
+// ── Ontologie-Tab ─────────────────────────────────────────────────────────────
+
+const ONTO_COLORS = {
+  coypu:     { background: "#94a3b8", border: "#64748b", font: "#1e293b" },
+  inherited: { background: "#0ea5e9", border: "#0369a1", font: "#ffffff" },
+  equiv:     { background: "#14b8a6", border: "#0f766e", font: "#ffffff" },
+  new:       { background: "#f59e0b", border: "#b45309", font: "#1e293b" },
+  enum:      { background: "#7c3aed", border: "#5b21b6", font: "#ffffff" }
+};
+
+let _ontoNodesDS = null;
+let _ontoEdgesDS = null;
+let _ontoNetwork = null;
+
+function initOntologyTab() {
+  const container = document.getElementById("ontoNetwork");
+  if (!container) return;
+
+  const nodes = [];
+  const edges = [];
+
+  ONTOLOGY_DATA.coypu.forEach(cls => {
+    nodes.push({
+      id: cls.id, label: cls.label,
+      color: ONTO_COLORS.coypu, font: { color: ONTO_COLORS.coypu.font },
+      group: "coypu", title: cls.comment || cls.id
+    });
+  });
+
+  ONTOLOGY_DATA.pdl_inherited.forEach(cls => {
+    const isEquiv = cls.rel === "equivalentClass";
+    const grp = isEquiv ? "equiv" : "inherited";
+    nodes.push({
+      id: cls.id, label: cls.label,
+      color: ONTO_COLORS[grp], font: { color: ONTO_COLORS[grp].font },
+      group: grp, title: cls.comment || cls.id
+    });
+    edges.push({
+      id: `${cls.id}-->${cls.parent}`,
+      from: cls.id, to: cls.parent,
+      label: cls.rel,
+      dashes: !isEquiv,
+      color: { color: isEquiv ? "#0f766e" : "#94a3b8" },
+      font: { size: 10, color: "#64748b", align: "middle" },
+      arrows: { to: { enabled: true, scaleFactor: 0.6 } }
+    });
+  });
+
+  ONTOLOGY_DATA.pdl_new.forEach(cls => {
+    nodes.push({
+      id: cls.id, label: cls.label,
+      color: ONTO_COLORS.new, font: { color: ONTO_COLORS.new.font },
+      group: "new", title: cls.comment || cls.id
+    });
+  });
+
+  ONTOLOGY_DATA.pdl_enum.forEach(cls => {
+    nodes.push({
+      id: cls.id, label: cls.label,
+      color: ONTO_COLORS.enum, font: { color: ONTO_COLORS.enum.font },
+      group: "enum", shape: "diamond",
+      title: cls.values ? `Werte: ${cls.values.join(", ")}` : cls.id
+    });
+  });
+
+  _ontoNodesDS = new vis.DataSet(nodes);
+  _ontoEdgesDS = new vis.DataSet(edges);
+
+  const options = {
+    physics: { solver: "repulsion", repulsion: { nodeDistance: 140 }, stabilization: { iterations: 150 } },
+    layout: { randomSeed: 42 },
+    nodes: { shape: "box", borderWidth: 2, borderWidthSelected: 3, margin: { top: 8, bottom: 8, left: 10, right: 10 }, font: { size: 12, face: "Space Grotesk, system-ui, sans-serif" } },
+    edges: { width: 1.5, selectionWidth: 2 },
+    interaction: { hover: true, tooltipDelay: 200 }
+  };
+
+  _ontoNetwork = new vis.Network(container, { nodes: _ontoNodesDS, edges: _ontoEdgesDS }, options);
+  _ontoNetwork.on("click", (params) => {
+    if (params.nodes.length > 0) showOntologyDetails(params.nodes[0]);
+  });
+  _ontoNetwork.once("stabilized", () => {
+    _ontoNetwork.redraw();
+    _ontoNetwork.fit();
+  });
+
+  document.querySelectorAll(".onto-filter").forEach(btn => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll(".onto-filter").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      applyOntoFilter(btn.dataset.filter);
+    });
+  });
+
+  renderOntoStats();
+}
+
+function applyOntoFilter(filter) {
+  if (!_ontoNodesDS) return;
+  const all = [
+    ...ONTOLOGY_DATA.coypu.map(c => ({ id: c.id, group: "coypu" })),
+    ...ONTOLOGY_DATA.pdl_inherited.map(c => ({ id: c.id, group: c.rel === "equivalentClass" ? "equiv" : "inherited" })),
+    ...ONTOLOGY_DATA.pdl_new.map(c => ({ id: c.id, group: "new" })),
+    ...ONTOLOGY_DATA.pdl_enum.map(c => ({ id: c.id, group: "enum" }))
+  ];
+  const visibleGroups = {
+    all:       ["coypu", "inherited", "equiv", "new", "enum"],
+    coypu:     ["coypu"],
+    inherited: ["inherited", "equiv"],
+    new:       ["new", "enum"]
+  }[filter] || ["coypu", "inherited", "equiv", "new", "enum"];
+
+  const updates = all.map(n => ({ id: n.id, hidden: !visibleGroups.includes(n.group) }));
+  _ontoNodesDS.update(updates);
+
+  const hiddenIds = new Set(updates.filter(u => u.hidden).map(u => u.id));
+  _ontoEdgesDS.update(_ontoEdgesDS.get().map(e => ({
+    id: e.id, hidden: hiddenIds.has(e.from) || hiddenIds.has(e.to)
+  })));
+
+  // Cards synchron filtern
+  const visibleGroupsForCards = visibleGroups;
+
+  if (elements.ontoCardsGrid) {
+    elements.ontoCardsGrid.querySelectorAll(".onto-card").forEach(card => {
+      card.style.display = visibleGroupsForCards.includes(card.dataset.group) ? "" : "none";
+    });
+  }
+}
+
+function _makeEl(tag, cls, text) {
+  const el = document.createElement(tag);
+  if (cls) el.className = cls;
+  if (text !== undefined) el.textContent = text;
+  return el;
+}
+
+function showOntologyDetails(nodeId) {
+  const detailsEmpty = document.getElementById("ontoDetailsEmpty");
+  const detailsContent = document.getElementById("ontoDetailsContent");
+  if (!detailsEmpty || !detailsContent) return;
+
+  let cls = null;
+  let category = null;
+  const checks = [
+    { list: ONTOLOGY_DATA.coypu,         cat: "CoyPu-Basisklasse" },
+    { list: ONTOLOGY_DATA.pdl_inherited, cat: "PDL geerbt" },
+    { list: ONTOLOGY_DATA.pdl_new,       cat: "PDL-Neuerung" },
+    { list: ONTOLOGY_DATA.pdl_enum,      cat: "PDL-Enumeration" }
+  ];
+  for (const check of checks) {
+    cls = check.list.find(c => c.id === nodeId);
+    if (cls) { category = check.cat; break; }
+  }
+  if (!cls) return;
+
+  const grpKey = category === "CoyPu-Basisklasse" ? "coypu"
+    : category === "PDL geerbt" ? (cls.rel === "equivalentClass" ? "equiv" : "inherited")
+    : category === "PDL-Enumeration" ? "enum" : "new";
+
+  const badgeClass = {
+    coypu: "onto-badge-coypu", inherited: "onto-badge-inherited",
+    equiv: "onto-badge-equiv", new: "onto-badge-new", enum: "onto-badge-enum"
+  }[grpKey];
+
+  const frag = document.createDocumentFragment();
+
+  const typeP = _makeEl("p", "details-type");
+  typeP.appendChild(_makeEl("span", `onto-badge ${badgeClass}`, category));
+  frag.appendChild(typeP);
+  frag.appendChild(_makeEl("h3", "details-title onto-details-title", cls.label));
+
+  const dl = _makeEl("dl", "onto-dl");
+  const addRow = (dtText, ddNodes) => {
+    dl.appendChild(_makeEl("dt", null, dtText));
+    const dd = _makeEl("dd");
+    if (typeof ddNodes === "string") {
+      dd.textContent = ddNodes;
+    } else {
+      ddNodes.forEach(n => dd.appendChild(n));
+    }
+    dl.appendChild(dd);
+  };
+
+  addRow("IRI", [_makeEl("code", null, cls.id)]);
+  if (cls.rel)     addRow("Relation",     [_makeEl("code", null, cls.rel)]);
+  if (cls.parent)  addRow("Elternklasse", [_makeEl("code", null, cls.parent)]);
+  if (cls.comment) addRow("Beschreibung", cls.comment);
+  if (cls.values) {
+    const codes = cls.values.flatMap((v, i) =>
+      i < cls.values.length - 1
+        ? [_makeEl("code", null, v), document.createTextNode(" ")]
+        : [_makeEl("code", null, v)]
+    );
+    addRow("Werte", codes);
+  }
+  frag.appendChild(dl);
+
+  detailsEmpty.style.display = "none";
+  detailsContent.style.display = "block";
+  detailsContent.replaceChildren(frag);
+}
+
+function renderOntoStats() {
+  const el = document.getElementById("ontoStats");
+  if (!el) return;
+  const inherited = ONTOLOGY_DATA.pdl_inherited.filter(c => c.rel === "subClassOf").length;
+  const equiv = ONTOLOGY_DATA.pdl_inherited.filter(c => c.rel === "equivalentClass").length;
+  const totalPdl = ONTOLOGY_DATA.pdl_inherited.length + ONTOLOGY_DATA.pdl_new.length + ONTOLOGY_DATA.pdl_enum.length;
+  const rows = [
+    ["CoyPu-Basisklassen",      ONTOLOGY_DATA.coypu.length],
+    ["PDL geerbt (subClassOf)", inherited],
+    ["PDL equivalentClass",     equiv],
+    ["PDL-Neuerungen",          ONTOLOGY_DATA.pdl_new.length],
+    ["PDL-Enumerationen",       ONTOLOGY_DATA.pdl_enum.length],
+    ["Gesamt PDL-Klassen",      totalPdl]
+  ];
+  el.replaceChildren();
+  rows.forEach(([label, count], i) => {
+    const li = _makeEl("li");
+    if (i === 5) {
+      li.style.borderTop = "1px solid var(--stroke)";
+      li.style.paddingTop = "4px";
+      li.style.fontWeight = "600";
+    }
+    li.appendChild(_makeEl("span", "onto-stat-label", label));
+    li.appendChild(_makeEl("span", "onto-stat-val", String(count)));
+    el.appendChild(li);
+  });
+}
+
+function setOntoSubTab(tab) {
+  const isGraph = tab === "graph";
+  const isCards = tab === "cards";
+
+  const netEl = document.getElementById("ontoNetwork");
+  if (netEl) netEl.style.display = isGraph ? "block" : "none";
+  if (elements.ontoCardsView) elements.ontoCardsView.style.display = isCards ? "block" : "none";
+
+  if (elements.ontoTabGraph) elements.ontoTabGraph.classList.toggle("active", isGraph);
+  if (elements.ontoTabCards) elements.ontoTabCards.classList.toggle("active", isCards);
+
+  if (isCards && !state.uiState.ontoCardsInitialized) {
+    initOntoCards();
+    state.uiState.ontoCardsInitialized = true;
+  }
+
+  if (isGraph && _ontoNetwork) {
+    setTimeout(() => { _ontoNetwork.redraw(); _ontoNetwork.fit(); }, 50);
+  }
+}
+
+function initOntoCards() {
+  const grid = elements.ontoCardsGrid;
+  if (!grid) return;
+
+  const allClasses = [
+    ...ONTOLOGY_DATA.coypu.map(c => ({ ...c, group: "coypu", groupLabel: "CoyPu-Basisklasse" })),
+    ...ONTOLOGY_DATA.pdl_inherited.map(c => ({ ...c, group: c.rel === "equivalentClass" ? "equiv" : "inherited", groupLabel: "PDL geerbt" })),
+    ...ONTOLOGY_DATA.pdl_new.map(c => ({ ...c, group: "new", groupLabel: "PDL-Neuerung" })),
+    ...ONTOLOGY_DATA.pdl_enum.map(c => ({ ...c, group: "enum", groupLabel: "PDL-Enumeration" }))
+  ];
+
+  grid.replaceChildren();
+
+  allClasses.forEach(cls => {
+    const card = document.createElement("article");
+    card.className = "onto-card";
+    card.dataset.id = cls.id;
+    card.dataset.group = cls.group;
+
+    const header = document.createElement("div");
+    header.className = "onto-card-header";
+
+    const meta = document.createElement("div");
+    meta.className = "onto-card-meta";
+
+    const labelEl = document.createElement("div");
+    labelEl.className = "onto-card-label";
+
+    const dot = document.createElement("span");
+    dot.className = `onto-dot onto-dot-${cls.group}`;
+    labelEl.appendChild(dot);
+    labelEl.appendChild(document.createTextNode(cls.label));
+
+    const badgeEl = document.createElement("div");
+    badgeEl.className = "onto-card-badge-small";
+    badgeEl.textContent = cls.groupLabel;
+
+    meta.appendChild(labelEl);
+    meta.appendChild(badgeEl);
+
+    const toggleBtn = document.createElement("button");
+    toggleBtn.className = "onto-card-toggle";
+    toggleBtn.type = "button";
+    toggleBtn.textContent = "+";
+    toggleBtn.setAttribute("aria-label", "Details ein-/ausblenden");
+
+    header.appendChild(meta);
+    header.appendChild(toggleBtn);
+
+    const body = document.createElement("div");
+    body.className = "onto-card-body";
+
+    const dl = document.createElement("dl");
+    dl.className = "onto-card-dl";
+
+    const addRow = (dtText, ddNodes) => {
+      const dt = document.createElement("dt");
+      dt.textContent = dtText;
+      const dd = document.createElement("dd");
+      if (typeof ddNodes === "string") {
+        dd.textContent = ddNodes;
+      } else {
+        ddNodes.forEach(n => dd.appendChild(n));
+      }
+      dl.appendChild(dt);
+      dl.appendChild(dd);
+    };
+
+    const makeCode = text => {
+      const c = document.createElement("code");
+      c.textContent = text;
+      return c;
+    };
+
+    addRow("IRI", [makeCode(cls.id)]);
+    if (cls.rel)     addRow("Relation",     [makeCode(cls.rel)]);
+    if (cls.parent)  addRow("Elternklasse", [makeCode(cls.parent)]);
+    if (cls.comment) addRow("Beschreibung", cls.comment);
+    if (cls.values) {
+      const codes = cls.values.flatMap((v, i) =>
+        i < cls.values.length - 1
+          ? [makeCode(v), document.createTextNode(" ")]
+          : [makeCode(v)]
+      );
+      addRow("Werte", codes);
+    }
+
+    body.appendChild(dl);
+    card.appendChild(header);
+    card.appendChild(body);
+
+    toggleBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      toggleOntoCard(card, toggleBtn);
+    });
+
+    card.addEventListener("click", () => {
+      showOntologyDetails(cls.id);
+    });
+
+    grid.appendChild(card);
+  });
+}
+
+function toggleOntoCard(card, btn) {
+  const expanded = card.classList.toggle("expanded");
+  btn.textContent = expanded ? "−" : "+";
+  btn.setAttribute("aria-expanded", String(expanded));
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 function updateFileLabel() {
   elements.fileLabel.textContent = state.fileName
@@ -2711,6 +3138,13 @@ function wireUI() {
 
   elements.tabGraph.addEventListener("click", () => setActiveTab("graph"));
   elements.tabYaml.addEventListener("click", () => setActiveTab("yaml"));
+  elements.tabOntology.addEventListener("click", () => setActiveTab("ontology"));
+  if (elements.ontoTabGraph) {
+    elements.ontoTabGraph.addEventListener("click", () => setOntoSubTab("graph"));
+  }
+  if (elements.ontoTabCards) {
+    elements.ontoTabCards.addEventListener("click", () => setOntoSubTab("cards"));
+  }
   elements.tabAbout.addEventListener("click", () => setActiveTab("about"));
   elements.yamlExpand.addEventListener("click", () => setAllYamlDetails(true));
   elements.yamlCollapse.addEventListener("click", () => setAllYamlDetails(false));
