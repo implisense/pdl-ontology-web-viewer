@@ -4,7 +4,7 @@ import { convertToTurtle, ENTITY_TYPE_TO_COYPU, EVENT_TYPE_TO_COYPU } from '../t
 
 // Sample PDL data for testing
 const samplePdl = {
-  pdl_version: '1.0',
+  pdl_version: '1.1',
   scenario: {
     id: 'test_scenario',
     name: 'Test Scenario',

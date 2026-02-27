@@ -10,7 +10,7 @@
 # Querverbindungen: S6 (Rechenzentren), S8 (Seefracht)
 # =============================================================================
 
-pdl_version: "1.0"
+pdl_version: "1.1"
 
 scenario:
   id: submarine_cable_disruption

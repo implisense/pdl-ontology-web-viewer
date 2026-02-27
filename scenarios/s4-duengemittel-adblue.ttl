@@ -33,7 +33,7 @@ pdlr:scenario_fertilizer_adblue_disruption a pdl:Scenario ;
     pdl:sector "chemistry" ;
     pdl:criticality pdl:Criticality_high ;
     dcterms:description "Simulation der Kaskadeneffekte eines Erdgas-Lieferstopps auf die Ammoniakproduktion (Haber-Bosch-Verfahren) und deren Folgeprodukte. Erdgas macht 70-80% der NH3-Produktionskosten aus. Bei Gaspreisen über 150 EUR/MWh wird Produktion unrentabel. Betroffen: CO2 für Lebensmittelindustrie, AdBlue für LKW-Logistik, Düngemittel für Landwirtschaft.\n" ;
-    pdl:pdlVersion "1.0" .
+    pdl:pdlVersion "1.1" .
 
 # =============================================================================
 # Entities

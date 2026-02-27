@@ -4,7 +4,7 @@
 # A semantic model for supply chain disruption scenarios that extends
 # and re-uses the CoyPu ontology (https://schema.coypu.org/global/2.3)
 #
-# Version: 1.0
+# Version: 1.1
 # Created: 2026-02-04
 # License: CC BY 4.0
 # =============================================================================
@@ -998,7 +998,7 @@ pdlr:scenario_example a pdl:Scenario ;
     rdfs:label "Soy Feed Supply Chain Disruption" ;
     pdl:sector "agriculture" ;
     pdl:criticality pdl:Criticality_high ;
-    pdl:pdlVersion "1.0" .
+    pdl:pdlVersion "1.1" .
 """@en .
 
 pdl:SupplyChainConnection skos:example """

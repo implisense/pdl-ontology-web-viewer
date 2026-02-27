@@ -843,7 +843,7 @@ pdlr:scenario_example a pdl:Scenario ;
     rdfs:label "Soy Feed Supply Chain Disruption" ;
     pdl:sector "agriculture" ;
     pdl:criticality pdl:Criticality_high ;
-    pdl:pdlVersion "1.0" .
+    pdl:pdlVersion "1.1" .
 </skos:example>
   </owl:Class>
   <owl:Class rdf:about="https://provider-project.org/ontology/pdl#Severity">

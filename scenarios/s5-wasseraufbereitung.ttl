@@ -33,7 +33,7 @@ pdlr:scenario_water_treatment_disruption a pdl:Scenario ;
     pdl:sector "water" ;
     pdl:criticality pdl:Criticality_high ;
     dcterms:description "Simulation der Auswirkungen eines Chlorproduktionsstopps durch Strompreisexplosion auf die deutsche Trinkwasserversorgung. Chlor-Alkali-Elektrolyse benötigt 2.400-3.000 kWh/t Chlor. Bei Strompreisen >400 EUR/MWh werden Produktionen eingestellt.\n" ;
-    pdl:pdlVersion "1.0" .
+    pdl:pdlVersion "1.1" .
 
 # =============================================================================
 # Entities

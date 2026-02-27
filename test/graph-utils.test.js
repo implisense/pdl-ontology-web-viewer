@@ -24,7 +24,7 @@ test("parsePercentage parses signed percentages", () => {
 
 test("convertToGraphJson builds nodes and edges including substitutions", () => {
   const pdl = {
-    pdl_version: "1.0",
+    pdl_version: "1.1",
     scenario: { id: "s1", name: "Test" },
     entities: [
       { id: "a", type: "manufacturer", name: "Alpha" },

@@ -4,12 +4,15 @@
   "title": "PROVIDER Domain Language (PDL) Schema",
   "description": "Schema for PDL - a YAML-based DSL for supply chain disruption scenarios",
   "type": "object",
-  "required": ["pdl_version", "scenario"],
+  "required": [
+    "pdl_version",
+    "scenario"
+  ],
   "properties": {
     "pdl_version": {
       "type": "string",
-      "pattern": "^[0-9]+\\.[0-9]+$",
-      "description": "PDL specification version"
+      "const": "1.1",
+      "description": "PDL specification version (current: 1.1)"
     },
     "scenario": {
       "$ref": "#/definitions/scenario"
@@ -53,7 +56,12 @@
   "definitions": {
     "scenario": {
       "type": "object",
-      "required": ["id", "name", "sector", "criticality"],
+      "required": [
+        "id",
+        "name",
+        "sector",
+        "criticality"
+      ],
       "properties": {
         "id": {
           "type": "string",
@@ -70,7 +78,11 @@
         },
         "criticality": {
           "type": "string",
-          "enum": ["high", "medium", "low"],
+          "enum": [
+            "high",
+            "medium",
+            "low"
+          ],
           "description": "Overall criticality level"
         },
         "description": {
@@ -82,7 +94,12 @@
     },
     "entity": {
       "type": "object",
-      "required": ["id", "type", "name", "sector"],
+      "required": [
+        "id",
+        "type",
+        "name",
+        "sector"
+      ],
       "properties": {
         "id": {
           "type": "string",
@@ -91,7 +108,13 @@
         },
         "type": {
           "type": "string",
-          "enum": ["manufacturer", "commodity", "infrastructure", "service", "region"],
+          "enum": [
+            "manufacturer",
+            "commodity",
+            "infrastructure",
+            "service",
+            "region"
+          ],
           "description": "Entity type classification"
         },
         "name": {
@@ -123,7 +146,9 @@
     },
     "supplyChain": {
       "type": "object",
-      "required": ["id"],
+      "required": [
+        "id"
+      ],
       "properties": {
         "id": {
           "type": "string",
@@ -158,7 +183,11 @@
     },
     "dependency": {
       "type": "object",
-      "required": ["from", "to", "type"],
+      "required": [
+        "from",
+        "to",
+        "type"
+      ],
       "properties": {
         "from": {
           "type": "string",
@@ -174,7 +203,11 @@
         },
         "criticality": {
           "type": "string",
-          "enum": ["high", "medium", "low"],
+          "enum": [
+            "high",
+            "medium",
+            "low"
+          ],
           "description": "Dependency criticality"
         },
         "substitution_ref": {
@@ -186,7 +219,12 @@
     },
     "substitution": {
       "type": "object",
-      "required": ["id", "from", "to", "type"],
+      "required": [
+        "id",
+        "from",
+        "to",
+        "type"
+      ],
       "properties": {
         "id": {
           "type": "string",
@@ -203,12 +241,22 @@
         },
         "type": {
           "type": "string",
-          "enum": ["product", "supplier", "route", "technology", "buffer", "mode"],
+          "enum": [
+            "product",
+            "supplier",
+            "route",
+            "technology",
+            "buffer",
+            "mode"
+          ],
           "description": "Substitution type"
         },
         "direction": {
           "type": "string",
-          "enum": ["supply", "demand"],
+          "enum": [
+            "supply",
+            "demand"
+          ],
           "description": "Substitution direction"
         },
         "coverage": {
@@ -299,7 +347,9 @@
     },
     "sideEffect": {
       "type": "object",
-      "required": ["type"],
+      "required": [
+        "type"
+      ],
       "properties": {
         "type": {
           "type": "string",
@@ -333,7 +383,12 @@
     },
     "event": {
       "type": "object",
-      "required": ["id", "name", "type", "trigger"],
+      "required": [
+        "id",
+        "name",
+        "type",
+        "trigger"
+      ],
       "properties": {
         "id": {
           "type": "string",
@@ -385,7 +440,9 @@
     },
     "trigger": {
       "type": "object",
-      "required": ["target"],
+      "required": [
+        "target"
+      ],
       "properties": {
         "target": {
           "type": "string",
@@ -433,7 +490,12 @@
         },
         "severity": {
           "type": "string",
-          "enum": ["critical", "high", "medium", "low"],
+          "enum": [
+            "critical",
+            "high",
+            "medium",
+            "low"
+          ],
           "description": "Impact severity level"
         }
       },
@@ -441,7 +503,11 @@
     },
     "cascade": {
       "type": "object",
-      "required": ["id", "origin", "timeline"],
+      "required": [
+        "id",
+        "origin",
+        "timeline"
+      ],
       "properties": {
         "id": {
           "type": "string",
@@ -478,7 +544,10 @@
     },
     "timelineEntry": {
       "type": "object",
-      "required": ["at", "event"],
+      "required": [
+        "at",
+        "event"
+      ],
       "properties": {
         "at": {
           "type": "string",

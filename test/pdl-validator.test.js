@@ -16,7 +16,7 @@ describe('PDL Validator - Scenario Structure', () => {
   describe('PDL Version', () => {
     it('should have a valid PDL version', () => {
       assert.ok(scenario.pdl_version, 'pdl_version is required');
-      assert.match(scenario.pdl_version, /^[0-9]+\.[0-9]+$/, 'pdl_version must match pattern X.Y');
+      assert.strictEqual(scenario.pdl_version, '1.1', 'pdl_version must be 1.1');
     });
   });
 
