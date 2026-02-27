@@ -1,6 +1,6 @@
 # PDL-Viewer
 
-Interaktiver Browser-Viewer für **PDL-YAML-Szenarien** (Provider Domain Language) — die DSL des Forschungsprojekts [PROVIDER](https://www.implisense.com). Versorgungsengpässe in Lieferketten werden als Netzwerkgraphen visualisiert und analysiert.
+Interaktiver Browser-Viewer für **PDL-YAML-Szenarien** (Provider Domain Language) — die DSL des Forschungsprojekts PROVIDER. Versorgungsengpässe in Lieferketten werden als Netzwerkgraphen visualisiert und analysiert.
 
 ---
 
