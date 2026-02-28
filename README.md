@@ -18,6 +18,7 @@ PDL (Provider Domain Language) ist eine YAML-basierte Beschreibungssprache für 
 - Hervorhebung von Kaskaden und Abhängigkeiten
 - Kürzeste-Pfad-Analyse zwischen beliebigen Knoten
 - Auszeichnung der am stärksten vernetzten Knoten (Gold/Silber/Bronze)
+- Integrierte Validierung (Schema + SHACL) mit Statusanzeige im UI
 - Export als JSON (flat, graph, simulation) oder YAML
 
 ### YAML-Viewer
@@ -50,7 +51,7 @@ PDL (Provider Domain Language) ist eine YAML-basierte Beschreibungssprache für 
 
 ## Schnellstart
 
-Kein Server erforderlich — der Viewer läuft vollständig im Browser.
+Kein Build-Prozess erforderlich. Für die Web-App genügt ein lokaler statischer Server.
 
 ```bash
 # Repository klonen
@@ -63,7 +64,13 @@ python3 -m http.server 8000
 
 Dann im Browser öffnen: **http://localhost:8000/web/**
 
-Über den Button „YAML hochladen" eigene PDL-Szenarien laden, oder mit „Beispiel laden" direkt starten.
+Szenarien laden:
+- Eigene Datei über „YAML hochladen"
+- Vordefinierte Szenarien (S1-S9) über das Pull-down „Szenario aus `scenarios/`" und „Ausgewähltes Szenario laden"
+
+Hinweis zum Splash-Screen:
+- Der Splash dient nur als Einstieg (Button „Starten")
+- Es werden dort keine Beispiel-Szenarien mehr angeboten oder automatisch geladen
 
 ---
 
@@ -74,6 +81,12 @@ Für Datenverarbeitung in der Kommandozeile (Node.js ≥ 18 erforderlich):
 ```bash
 # PDL-Szenario validieren
 node tools/pdl-validator.js scenarios/s1-soja.pdl.yaml
+
+# Gegen SHACL-Shapes validieren (YAML -> RDF -> SHACL)
+node tools/pdl-shacl-validator.js scenarios/s1-soja.pdl.yaml
+
+# Bereits exportierte Turtle-Datei gegen Shapes validieren
+node tools/pdl-shacl-validator.js output.ttl --shapes shapes/pdl.shacl.ttl
 
 # Nach RDF/Turtle konvertieren (für Knowledge Graph)
 node tools/pdl-to-rdf.js scenarios/s1-soja.pdl.yaml > output.ttl
@@ -100,8 +113,11 @@ PDL YAML (scenarios/)
     │
     └─→ Node.js-Tools (tools/)
         ├─ pdl-validator.js  — Schema- und Semantikvalidierung
+        ├─ pdl-shacl-validator.js — Ontologie-/Regelvalidierung via SHACL
         ├─ pdl-to-rdf.js     — RDF/Turtle-Export (pdl: + coy: Namespaces)
         └─ pdl-to-json.js    — JSON-Export (flat, graph, simulation)
+
+SHACL-Shapes: shapes/pdl.shacl.ttl
 
 Ontologie: ontology/pdl-ontology.ttl (~700 Zeilen OWL)
 ```
@@ -117,6 +133,7 @@ Der Browser-Frontend und die Node.js-Tools teilen keine Laufzeit — keine Build
 | Graph-Visualisierung | [vis-network 9.1.2](https://visjs.github.io/vis-network/) |
 | YAML-Parsing (Browser) | Vendored `yaml`-Paket |
 | Schema-Validierung | AJV (JSON Schema draft-07) |
+| Ontologie-Regeln | SHACL (`rdf-validate-shacl`) |
 | Ontologie | OWL/Turtle, CoyPu-kompatibel |
 | Node.js-Tests | Native `node:test` |
 
