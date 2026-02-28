@@ -75,6 +75,13 @@ entities:
     vulnerability: 0.9
     note: "Hohe Importabhängigkeit bei Antibiotika-Wirkstoffen, Chinas Exportanteil ~44%"
 
+  - id: alternative_antibiotics_api
+    type: commodity
+    name: Alternative Antibiotika-Wirkstoffe (Ampicillin, Levofloxacin)
+    sector: healthcare
+    vulnerability: 0.7
+    note: "Therapiealternativen bei Engpässen, oft mit geringerer Eignung"
+
   - id: paracetamol_api
     type: commodity
     name: Paracetamol/Ibuprofen-Wirkstoffe
@@ -220,7 +227,7 @@ supply_chains:
         type: input
         criticality: high
       - from: antibiotics_api
-        to: antibiotics_api
+        to: alternative_antibiotics_api
         type: substitution
         substitution_ref: sub_antibiotic_product
         criticality: medium
@@ -326,7 +333,7 @@ substitutions:
 
   - id: sub_antibiotic_product
     from: antibiotics_api
-    to: antibiotics_api
+    to: alternative_antibiotics_api
     type: product
     coverage: 0.60
     quality_delta: -0.10

@@ -291,7 +291,7 @@ supply_chains:
         note: "Ersatzkabel-Produktion dauert Wochen, Lagerbestände begrenzt"
       - from: cable_repair_fleet
         to: swift_payment_network
-        type: financial
+        type: input
         criticality: medium
         note: "Reparaturverträge erfordern funktionierenden Zahlungsverkehr"
 
@@ -325,7 +325,7 @@ supply_chains:
         note: "DNS-Anycast hochredundant; Puffer für lokale Auflösung — schützt nicht vor Bandbreitenverlust"
       - from: cable_repair_fleet
         to: financial_sector_de
-        type: financial
+        type: input
         criticality: medium
         note: "Feedback: Finanzstörung behindert Reparaturfinanzierung"
 
@@ -403,7 +403,6 @@ substitutions:
     quality_delta: 0.0
     cost_delta: 0.0
     ramp_up: 0d
-    duration_max: null
 
     activation:
       trigger: "dns_resilience_holds.active"

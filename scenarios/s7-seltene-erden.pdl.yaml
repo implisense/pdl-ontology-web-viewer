@@ -212,6 +212,7 @@ supply_chains:
       - [myanmar_rare_earth_mines, china_separation_plants]
       - [australia_rare_earth_mines, lynas_malaysia]
       - [china_separation_plants, ndfeb_magnet_producers]
+      - [china_separation_plants, katalysatoren_produktion]
       - [ndfeb_magnet_producers, ev_motor_producers_de]
       - [ndfeb_magnet_producers, wind_turbine_producers]
       - [ndfeb_magnet_producers, mri_producers]
@@ -279,6 +280,9 @@ supply_chains:
       - [alternative_magnet_tech, ev_motor_producers_de]
       - [alternative_magnet_tech, wind_turbine_producers]
       - [ev_market_de, automotive_oem_de]
+      - [eu_crma, recycling_infrastructure]
+      - [eu_crma, alternative_magnet_tech]
+      - [defense_industry_de, bundeswehr_readiness]
     dependencies:
       - from: ndfeb_magnet_producers
         to: lynas_malaysia
@@ -319,6 +323,14 @@ supply_chains:
         type: input
         criticality: medium
         note: "Umrüstung auf Reluktanzmotoren dauert 12-24 Monate"
+      - from: recycling_infrastructure
+        to: eu_crma
+        type: input
+        criticality: medium
+      - from: bundeswehr_readiness
+        to: defense_industry_de
+        type: input
+        criticality: high
 
 # =============================================================================
 # Substitutions

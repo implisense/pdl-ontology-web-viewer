@@ -10,8 +10,7 @@
   <link rel="stylesheet" href="https://unpkg.com/vis-network@9.1.2/styles/vis-network.min.css" />
   <link rel="stylesheet" href="styles.css" />
   <script src="https://unpkg.com/vis-network@9.1.2/standalone/umd/vis-network.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/ajv@8/dist/ajv7.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/ajv-formats@2/dist/ajv-formats.min.js"></script>
+  <script src="./vendor/ajv/ajv-browser.js"></script>
   <script type="module" src="app.js"></script>
 </head>
 <body>
@@ -38,7 +37,6 @@
       </div>
       <div class="splash-actions">
         <button id="splashStartBtn" type="button">Starten</button>
-        <button id="splashExampleBtn" class="ghost" type="button">Beispiel laden</button>
       </div>
     </div>
   </div>
@@ -98,7 +96,21 @@
           <input id="fileInput" type="file" accept=".yaml,.yml" />
           <span>YAML hochladen</span>
         </label>
-        <button id="exampleBtn" class="ghost">Beispiel laden: s1-soja.pdl.yaml</button>
+        <div class="scenario-loader">
+          <label for="exampleScenarioSelect">Szenario aus <code>scenarios/</code></label>
+          <select id="exampleScenarioSelect" class="scenario-select">
+            <option value="s1-soja.pdl.yaml">s1-soja.pdl.yaml</option>
+            <option value="s2-halbleiter.pdl.yaml">s2-halbleiter.pdl.yaml</option>
+            <option value="s3-pharma.pdl.yaml">s3-pharma.pdl.yaml</option>
+            <option value="s4-duengemittel-adblue.pdl.yaml">s4-duengemittel-adblue.pdl.yaml</option>
+            <option value="s5-wasseraufbereitung.pdl.yaml">s5-wasseraufbereitung.pdl.yaml</option>
+            <option value="s6-rechenzentren.pdl.yaml">s6-rechenzentren.pdl.yaml</option>
+            <option value="s7-seltene-erden.pdl.yaml">s7-seltene-erden.pdl.yaml</option>
+            <option value="s8-seefracht.pdl.yaml">s8-seefracht.pdl.yaml</option>
+            <option value="s9-unterwasserkabel.pdl.yaml">s9-unterwasserkabel.pdl.yaml</option>
+          </select>
+          <button id="exampleBtn" class="ghost" type="button">Ausgewähltes Szenario laden</button>
+        </div>
         <p id="status" class="status">Noch keine Datei geladen.</p>
       </section>
 
@@ -247,6 +259,15 @@
           <button class="tiny" data-supply="both" type="button">Beides</button>
           <button class="tiny ghost" data-supply="off" type="button">Aus</button>
         </div>
+      </section>
+
+      <section class="card validation-block">
+        <div class="validation-header">
+          <h2>Validierung</h2>
+          <button id="validationRun" class="tiny ghost" type="button">Neu prüfen</button>
+        </div>
+        <p id="validationStatus" class="status">Keine Datei geladen.</p>
+        <ul id="validationList" class="validation-list"></ul>
       </section>
 
       <section class="card">

@@ -42,6 +42,10 @@ const state = {
   validation: {
     errors: [],
     warnings: [],
+    items: [],
+    shaclFindings: [],
+    errorNodeIds: new Set(),
+    errorEdgeIds: new Set(),
     warningNodeIds: new Set(),
     warningEdgeIds: new Set(),
     schema: null,
@@ -149,8 +153,32 @@ const warningPalette = {
   edge: "#f59e0b"
 };
 
+const errorPalette = {
+  background: "#fee2e2",
+  border: "#dc2626",
+  edge: "#dc2626"
+};
+
+const DURATION_PATTERN = /^[0-9]+[dhwmy]$/;
+const PERCENT_PATTERN = /^[+-]?[0-9]+%$/;
+const CRITICALITY_VALUES = new Set(["high", "medium", "low"]);
+const DEPENDENCY_TYPE_VALUES = new Set(["energy", "input", "logistics", "data", "substitution", "demand"]);
+const SEVERITY_VALUES = new Set(["critical", "high", "medium", "low"]);
+const PRESET_SCENARIO_FILES = [
+  "s1-soja.pdl.yaml",
+  "s2-halbleiter.pdl.yaml",
+  "s3-pharma.pdl.yaml",
+  "s4-duengemittel-adblue.pdl.yaml",
+  "s5-wasseraufbereitung.pdl.yaml",
+  "s6-rechenzentren.pdl.yaml",
+  "s7-seltene-erden.pdl.yaml",
+  "s8-seefracht.pdl.yaml",
+  "s9-unterwasserkabel.pdl.yaml"
+];
+
 const elements = {
   fileInput: document.getElementById("fileInput"),
+  exampleScenarioSelect: document.getElementById("exampleScenarioSelect"),
   exampleBtn: document.getElementById("exampleBtn"),
   status: document.getElementById("status"),
   fileLabel: document.getElementById("fileLabel"),
@@ -180,6 +208,7 @@ const elements = {
   yamlCollapse: document.getElementById("yamlCollapse"),
   validationStatus: document.getElementById("validationStatus"),
   validationList: document.getElementById("validationList"),
+  validationRun: document.getElementById("validationRun"),
   nodeTypeFilters: document.getElementById("nodeTypeFilters"),
   edgeTypeFilters: document.getElementById("edgeTypeFilters"),
   sectorFilterBlock: document.getElementById("sectorFilterBlock"),
@@ -233,8 +262,7 @@ const elements = {
   tutorialBody: document.getElementById("tutorialBody"),
   tutorialStep: document.getElementById("tutorialStep"),
   splashScreen: document.getElementById("splashScreen"),
-  splashStartBtn: document.getElementById("splashStartBtn"),
-  splashExampleBtn: document.getElementById("splashExampleBtn")
+  splashStartBtn: document.getElementById("splashStartBtn")
 };
 
 const LOCATION_FLAG_BY_KEY = {
@@ -669,11 +697,31 @@ function applyWarningNode(node) {
   };
 }
 
+function applyErrorNode(node) {
+  return {
+    ...node,
+    borderWidth: (node.borderWidth || 1) + 2,
+    color: {
+      ...node.color,
+      border: errorPalette.border
+    }
+  };
+}
+
 function applyWarningEdge(edge) {
   return {
     ...edge,
     width: (edge.width || 1) + 1,
     color: { color: warningPalette.edge, highlight: warningPalette.edge },
+    dashes: true
+  };
+}
+
+function applyErrorEdge(edge) {
+  return {
+    ...edge,
+    width: (edge.width || 1) + 2,
+    color: { color: errorPalette.edge, highlight: errorPalette.edge },
     dashes: true
   };
 }
@@ -830,6 +878,17 @@ function applyFilters() {
         return applySupplyDim ? dimEdge(edge) : edge;
       })
     : edgesToRender;
+
+  if (state.validation.errorNodeIds.size) {
+    finalNodes = finalNodes.map((node) =>
+      state.validation.errorNodeIds.has(node.id) ? applyErrorNode(node) : node
+    );
+  }
+  if (state.validation.errorEdgeIds.size) {
+    finalEdges = finalEdges.map((edge) =>
+      state.validation.errorEdgeIds.has(edge.id) ? applyErrorEdge(edge) : edge
+    );
+  }
 
   if (state.validation.warningNodeIds.size) {
     finalNodes = finalNodes.map((node) =>
@@ -1264,25 +1323,122 @@ function setValidationStatus(message, isError = false) {
   elements.validationStatus.style.color = isError ? "#b91c1c" : "#4b5563";
 }
 
+function focusValidationNode(nodeId) {
+  if (!nodeId) return false;
+  const node = state.nodeById.get(nodeId);
+  if (!node) return false;
+
+  setActiveTab("graph");
+  state.selectedNodeId = node.id;
+  state.selectedNodeType = node.type;
+  updateSupplyUI();
+  renderDetailsSelection(node);
+  applyFilters();
+
+  const visible = state.nodesData?.get(node.id);
+  if (visible && state.network) {
+    state.network.selectNodes([node.id]);
+    state.network.focus(node.id, { scale: 1.12, animation: true });
+    return true;
+  }
+  return false;
+}
+
+function focusValidationEdge(edgeId) {
+  if (!edgeId) return false;
+  const edge = state.edgeById.get(edgeId);
+  if (!edge) return false;
+
+  setActiveTab("graph");
+  state.selectedNodeId = null;
+  state.selectedNodeType = null;
+  updateSupplyUI();
+  renderDetailsSelection(edge);
+  applyFilters();
+
+  if (!state.network) return true;
+  const visible = state.edgesData?.get(edge.id);
+  if (visible) {
+    state.network.unselectAll();
+    state.network.selectEdges([edge.id]);
+    if (state.nodesData?.get(edge.from)) {
+      state.network.focus(edge.from, { scale: 1.06, animation: true });
+    } else if (state.nodesData?.get(edge.to)) {
+      state.network.focus(edge.to, { scale: 1.06, animation: true });
+    }
+    return true;
+  }
+  return false;
+}
+
+function focusValidationItem(item) {
+  if (!item) return;
+  const edgeFocused = item.edgeId ? focusValidationEdge(item.edgeId) : false;
+  const nodeFocused = !edgeFocused && item.nodeId ? focusValidationNode(item.nodeId) : false;
+  if (!edgeFocused && !nodeFocused) {
+    setValidationStatus("Eintrag hat keinen sichtbaren Graph-Bezug (evtl. durch Filter ausgeblendet).");
+  }
+}
+
 function renderValidation() {
-  if (!elements.validationList) return;
+  if (!elements.validationList || !elements.validationStatus) return;
   elements.validationList.innerHTML = "";
-  const { errors, warnings } = state.validation;
-  if (!errors.length && !warnings.length) {
-    setValidationStatus("Validierung: ok");
+  const items = state.validation.items || [];
+  if (!items.length) {
+    setValidationStatus("Validierung: ok (Schema, Semantik, SHACL)");
     return;
   }
-  setValidationStatus(`Validierung: ${errors.length} Fehler, ${warnings.length} Warnungen`, errors.length > 0);
-  errors.forEach((message) => {
+
+  const errors = items.filter((item) => item.level === "error").length;
+  const warnings = items.filter((item) => item.level !== "error").length;
+  const shaclIssues = items.filter((item) => item.source === "shacl").length;
+  setValidationStatus(
+    `Validierung: ${errors} Fehler, ${warnings} Warnungen${shaclIssues ? ` · SHACL ${shaclIssues}` : ""}`,
+    errors > 0
+  );
+
+  items.forEach((item) => {
+    const sourceLabel = item.source === "schema" ? "Schema" : item.source === "shacl" ? "SHACL" : "Semantik";
+    const levelLabel = item.level === "error" ? "Fehler" : "Warnung";
+    const target =
+      item.nodeId
+        ? `Knoten: ${getNodeLabelById(item.nodeId)}`
+        : item.edgeId
+          ? `Kante: ${item.edgeId}`
+          : null;
+    const meta = [item.path ? `Pfad: ${item.path}` : null, target].filter(Boolean).join(" · ");
+
     const li = document.createElement("li");
-    li.className = "error";
-    li.textContent = message;
-    elements.validationList.appendChild(li);
-  });
-  warnings.forEach((message) => {
-    const li = document.createElement("li");
-    li.className = "warn";
-    li.textContent = message;
+    li.className = item.level === "error" ? "error" : "warn";
+    if (item.source === "shacl") li.classList.add("shacl");
+
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "validation-item-btn";
+    button.disabled = !item.nodeId && !item.edgeId;
+
+    const head = document.createElement("span");
+    head.className = "validation-item-head";
+    head.textContent = `${sourceLabel} · ${levelLabel}`;
+    button.appendChild(head);
+
+    const text = document.createElement("span");
+    text.className = "validation-item-text";
+    text.textContent = item.message;
+    button.appendChild(text);
+
+    if (meta) {
+      const metaLine = document.createElement("span");
+      metaLine.className = "validation-item-meta";
+      metaLine.textContent = meta;
+      button.appendChild(metaLine);
+    }
+
+    if (!button.disabled) {
+      button.addEventListener("click", () => focusValidationItem(item));
+    }
+
+    li.appendChild(button);
     elements.validationList.appendChild(li);
   });
 }
@@ -1333,18 +1489,30 @@ function extractEventIdsFromTrigger(triggerExpression) {
   return Array.from(ids);
 }
 
+function makeValidationItem({
+  source = "semantic",
+  level = "warn",
+  message,
+  path = null,
+  nodeId = null,
+  edgeId = null
+}) {
+  return { source, level, message, path, nodeId, edgeId };
+}
+
 function checkReferences(pdl) {
   const issues = [];
   const entityIds = new Set((pdl.entities || []).map((entity) => entity.id));
   const eventIds = new Set((pdl.events || []).map((event) => event.id));
   const substitutionIds = new Set((pdl.substitutions || []).map((item) => item.id));
 
-  (pdl.supply_chains || []).forEach((chain) => {
+  (pdl.supply_chains || []).forEach((chain, chainIdx) => {
     (chain.stages || []).forEach((stage, idx) => {
       const [from, to] = stage;
       if (!entityIds.has(from) || !entityIds.has(to)) {
         issues.push({
           message: `Supply-Chain ${chain.id}: Stage ${idx + 1} verweist auf unbekannte Entity.`,
+          path: `supply_chains[${chainIdx}].stages[${idx}]`,
           nodeId: `chain:${chain.id}`,
           edgeId: `edge:${chain.id}-stage-${idx}`
         });
@@ -1354,6 +1522,7 @@ function checkReferences(pdl) {
       if (!entityIds.has(dep.from) || !entityIds.has(dep.to)) {
         issues.push({
           message: `Supply-Chain ${chain.id}: Dependency ${idx + 1} verweist auf unbekannte Entity.`,
+          path: `supply_chains[${chainIdx}].dependencies[${idx}]`,
           nodeId: `chain:${chain.id}`,
           edgeId: `edge:${chain.id}-dep-${idx}`
         });
@@ -1361,6 +1530,7 @@ function checkReferences(pdl) {
       if (dep.substitution_ref && !substitutionIds.has(dep.substitution_ref)) {
         issues.push({
           message: `Supply-Chain ${chain.id}: Dependency ${idx + 1} hat unbekannte substitution_ref ${dep.substitution_ref}.`,
+          path: `supply_chains[${chainIdx}].dependencies[${idx}].substitution_ref`,
           nodeId: `chain:${chain.id}`,
           edgeId: `edge:${chain.id}-dep-sub-${idx}`
         });
@@ -1368,10 +1538,11 @@ function checkReferences(pdl) {
     });
   });
 
-  (pdl.events || []).forEach((event) => {
+  (pdl.events || []).forEach((event, eventIdx) => {
     if (event.trigger?.target && !entityIds.has(event.trigger.target)) {
       issues.push({
         message: `Event ${event.id}: Trigger-Target ${event.trigger.target} existiert nicht.`,
+        path: `events[${eventIdx}].trigger.target`,
         nodeId: `event:${event.id}`,
         edgeId: `edge:${event.id}-trigger`
       });
@@ -1380,6 +1551,7 @@ function checkReferences(pdl) {
       if (!eventIds.has(causeId)) {
         issues.push({
           message: `Event ${event.id}: Cause ${causeId} existiert nicht.`,
+          path: `events[${eventIdx}].causes[${idx}]`,
           nodeId: `event:${event.id}`,
           edgeId: `edge:${event.id}-causes-${idx}`
         });
@@ -1388,16 +1560,18 @@ function checkReferences(pdl) {
     if (event.substitution_ref && !substitutionIds.has(event.substitution_ref)) {
       issues.push({
         message: `Event ${event.id}: substitution_ref ${event.substitution_ref} existiert nicht.`,
+        path: `events[${eventIdx}].substitution_ref`,
         nodeId: `event:${event.id}`,
         edgeId: `edge:${event.id}-substitution-ref`
       });
     }
   });
 
-  (pdl.substitutions || []).forEach((substitution) => {
+  (pdl.substitutions || []).forEach((substitution, subIdx) => {
     if (substitution.from && !entityIds.has(substitution.from)) {
       issues.push({
         message: `Substitution ${substitution.id}: from ${substitution.from} existiert nicht.`,
+        path: `substitutions[${subIdx}].from`,
         nodeId: `substitution:${substitution.id}`,
         edgeId: `edge:${substitution.id}-for`
       });
@@ -1406,6 +1580,7 @@ function checkReferences(pdl) {
     if (substitution.to && !entityIds.has(substitution.to)) {
       issues.push({
         message: `Substitution ${substitution.id}: to ${substitution.to} existiert nicht.`,
+        path: `substitutions[${subIdx}].to`,
         nodeId: `substitution:${substitution.id}`,
         edgeId: `edge:${substitution.id}-by`
       });
@@ -1416,6 +1591,7 @@ function checkReferences(pdl) {
       if (!eventIds.has(eventId)) {
         issues.push({
           message: `Substitution ${substitution.id}: activation.trigger referenziert unbekanntes Event ${eventId}.`,
+          path: `substitutions[${subIdx}].activation.trigger`,
           nodeId: `substitution:${substitution.id}`,
           edgeId: `edge:${substitution.id}-activation-${idx}`
         });
@@ -1426,6 +1602,7 @@ function checkReferences(pdl) {
       if (sideEffect.target && !entityIds.has(sideEffect.target)) {
         issues.push({
           message: `Substitution ${substitution.id}: side_effect target ${sideEffect.target} existiert nicht.`,
+          path: `substitutions[${subIdx}].side_effects[${idx}].target`,
           nodeId: `substitution:${substitution.id}`,
           edgeId: `edge:${substitution.id}-side-effect-${idx}`
         });
@@ -1436,6 +1613,7 @@ function checkReferences(pdl) {
       if (!entityIds.has(entityId)) {
         issues.push({
           message: `Substitution ${substitution.id}: dependency_overlap ${entityId} existiert nicht.`,
+          path: `substitutions[${subIdx}].dependency_overlap[${idx}]`,
           nodeId: `substitution:${substitution.id}`,
           edgeId: `edge:${substitution.id}-overlap-${idx}`
         });
@@ -1443,10 +1621,11 @@ function checkReferences(pdl) {
     });
   });
 
-  (pdl.cascades || []).forEach((cascade) => {
+  (pdl.cascades || []).forEach((cascade, cascadeIdx) => {
     if (cascade.origin && !eventIds.has(cascade.origin)) {
       issues.push({
         message: `Cascade ${cascade.id}: Origin ${cascade.origin} existiert nicht.`,
+        path: `cascades[${cascadeIdx}].origin`,
         nodeId: `cascade:${cascade.id}`,
         edgeId: `edge:${cascade.id}-origin`
       });
@@ -1456,6 +1635,7 @@ function checkReferences(pdl) {
       if (entry.event && !eventIds.has(entry.event)) {
         issues.push({
           message: `Cascade ${cascade.id}: Timeline-Event ${entry.event} existiert nicht.`,
+          path: `cascades[${cascadeIdx}].timeline[${idx}].event`,
           nodeId: timelineNodeId,
           edgeId: `edge:${cascade.id}-seq-${idx}`
         });
@@ -1464,6 +1644,7 @@ function checkReferences(pdl) {
         if (!entityIds.has(entityId)) {
           issues.push({
             message: `Cascade ${cascade.id}: Affects ${entityId} existiert nicht.`,
+            path: `cascades[${cascadeIdx}].timeline[${idx}].affects`,
             nodeId: timelineNodeId,
             edgeId: `edge:${cascade.id}-${idx}-affects-${entityId}`
           });
@@ -1474,9 +1655,373 @@ function checkReferences(pdl) {
 
   return issues;
 }
+
+function checkShaclConstraints(pdl) {
+  const findings = [];
+  const entityIds = new Set((pdl.entities || []).map((entity) => entity.id));
+  const eventIds = new Set((pdl.events || []).map((event) => event.id));
+  const substitutionIds = new Set((pdl.substitutions || []).map((item) => item.id));
+
+  const addFinding = ({
+    message,
+    path,
+    nodeId = null,
+    edgeId = null,
+    level = "error"
+  }) => {
+    findings.push(
+      makeValidationItem({
+        source: "shacl",
+        level,
+        message,
+        path,
+        nodeId,
+        edgeId
+      })
+    );
+  };
+
+  if (!CRITICALITY_VALUES.has(pdl?.scenario?.criticality)) {
+    addFinding({
+      message: "Scenario criticality muss high, medium oder low sein.",
+      path: "scenario.criticality",
+      level: "error"
+    });
+  }
+
+  (pdl.entities || []).forEach((entity, entityIdx) => {
+    const nodeId = `entity:${entity.id}`;
+    if (entity.vulnerability !== undefined && (typeof entity.vulnerability !== "number" || entity.vulnerability < 0 || entity.vulnerability > 1)) {
+      addFinding({
+        message: `Entity ${entity.id}: vulnerability muss im Bereich [0, 1] liegen.`,
+        path: `entities[${entityIdx}].vulnerability`,
+        nodeId
+      });
+    }
+    if (entity.substitution_potential !== undefined && (typeof entity.substitution_potential !== "number" || entity.substitution_potential < 0 || entity.substitution_potential > 1)) {
+      addFinding({
+        message: `Entity ${entity.id}: substitution_potential muss im Bereich [0, 1] liegen.`,
+        path: `entities[${entityIdx}].substitution_potential`,
+        nodeId
+      });
+    }
+  });
+
+  (pdl.supply_chains || []).forEach((chain, chainIdx) => {
+    const chainNodeId = `chain:${chain.id}`;
+    (chain.dependencies || []).forEach((dep, depIdx) => {
+      const depEdgeId = `edge:${chain.id}-dep-${depIdx}`;
+      if (!dep.from || !entityIds.has(dep.from)) {
+        addFinding({
+          message: `Dependency ${chain.id}/${depIdx + 1}: fromEntity muss auf eine vorhandene Entity zeigen.`,
+          path: `supply_chains[${chainIdx}].dependencies[${depIdx}].from`,
+          nodeId: chainNodeId,
+          edgeId: depEdgeId
+        });
+      }
+      if (!dep.to || !entityIds.has(dep.to)) {
+        addFinding({
+          message: `Dependency ${chain.id}/${depIdx + 1}: toEntity muss auf eine vorhandene Entity zeigen.`,
+          path: `supply_chains[${chainIdx}].dependencies[${depIdx}].to`,
+          nodeId: chainNodeId,
+          edgeId: depEdgeId
+        });
+      }
+      if (!DEPENDENCY_TYPE_VALUES.has(dep.type)) {
+        addFinding({
+          message: `Dependency ${chain.id}/${depIdx + 1}: type muss eine erlaubte DependencyType-Ausprägung sein.`,
+          path: `supply_chains[${chainIdx}].dependencies[${depIdx}].type`,
+          nodeId: chainNodeId,
+          edgeId: depEdgeId
+        });
+      }
+      if (dep.criticality !== undefined && !CRITICALITY_VALUES.has(dep.criticality)) {
+        addFinding({
+          message: `Dependency ${chain.id}/${depIdx + 1}: criticality muss high, medium oder low sein.`,
+          path: `supply_chains[${chainIdx}].dependencies[${depIdx}].criticality`,
+          nodeId: chainNodeId,
+          edgeId: depEdgeId
+        });
+      }
+      if (dep.substitution_ref && !substitutionIds.has(dep.substitution_ref)) {
+        addFinding({
+          message: `Dependency ${chain.id}/${depIdx + 1}: substitution_ref muss auf eine vorhandene Substitution zeigen.`,
+          path: `supply_chains[${chainIdx}].dependencies[${depIdx}].substitution_ref`,
+          nodeId: chainNodeId,
+          edgeId: `edge:${chain.id}-dep-sub-${depIdx}`
+        });
+      }
+    });
+  });
+
+  (pdl.events || []).forEach((event, eventIdx) => {
+    const eventNodeId = `event:${event.id}`;
+    const triggerPath = `events[${eventIdx}].trigger`;
+
+    if (!event.trigger?.target) {
+      addFinding({
+        message: `Event ${event.id}: trigger.target ist erforderlich.`,
+        path: `${triggerPath}.target`,
+        nodeId: eventNodeId
+      });
+    } else if (!entityIds.has(event.trigger.target)) {
+      addFinding({
+        message: `Event ${event.id}: trigger.target muss auf eine vorhandene Entity zeigen.`,
+        path: `${triggerPath}.target`,
+        nodeId: eventNodeId,
+        edgeId: `edge:${event.id}-trigger`
+      });
+    }
+
+    if (event.trigger?.probability !== undefined) {
+      const probability = event.trigger.probability;
+      if (typeof probability !== "number" || probability < 0 || probability > 1) {
+        addFinding({
+          message: `Event ${event.id}: trigger.probability muss im Bereich [0, 1] liegen.`,
+          path: `${triggerPath}.probability`,
+          nodeId: eventNodeId
+        });
+      }
+    }
+
+    const impact = event.impact || {};
+    if (impact.supply !== undefined && !PERCENT_PATTERN.test(String(impact.supply))) {
+      addFinding({
+        message: `Event ${event.id}: impact.supply muss als Prozentwert formatiert sein (z. B. -30%).`,
+        path: `events[${eventIdx}].impact.supply`,
+        nodeId: eventNodeId
+      });
+    }
+    if (impact.demand !== undefined && !PERCENT_PATTERN.test(String(impact.demand))) {
+      addFinding({
+        message: `Event ${event.id}: impact.demand muss als Prozentwert formatiert sein (z. B. +15%).`,
+        path: `events[${eventIdx}].impact.demand`,
+        nodeId: eventNodeId
+      });
+    }
+    if (impact.price !== undefined && !PERCENT_PATTERN.test(String(impact.price))) {
+      addFinding({
+        message: `Event ${event.id}: impact.price muss als Prozentwert formatiert sein (z. B. +25%).`,
+        path: `events[${eventIdx}].impact.price`,
+        nodeId: eventNodeId
+      });
+    }
+    if (impact.duration !== undefined && !DURATION_PATTERN.test(String(impact.duration))) {
+      addFinding({
+        message: `Event ${event.id}: impact.duration muss dem Format 14d/2w/6m entsprechen.`,
+        path: `events[${eventIdx}].impact.duration`,
+        nodeId: eventNodeId
+      });
+    }
+
+    (event.causes || []).forEach((causeId, causeIdx) => {
+      if (!eventIds.has(causeId)) {
+        addFinding({
+          message: `Event ${event.id}: causes[${causeIdx}] verweist auf ein unbekanntes Event.`,
+          path: `events[${eventIdx}].causes[${causeIdx}]`,
+          nodeId: eventNodeId,
+          edgeId: `edge:${event.id}-causes-${causeIdx}`
+        });
+      }
+    });
+
+    if (event.substitution_ref && !substitutionIds.has(event.substitution_ref)) {
+      addFinding({
+        message: `Event ${event.id}: substitution_ref muss auf eine vorhandene Substitution zeigen.`,
+        path: `events[${eventIdx}].substitution_ref`,
+        nodeId: eventNodeId,
+        edgeId: `edge:${event.id}-substitution-ref`
+      });
+    }
+  });
+
+  (pdl.substitutions || []).forEach((substitution, subIdx) => {
+    const substitutionNodeId = `substitution:${substitution.id}`;
+    if (!substitution.from || !entityIds.has(substitution.from)) {
+      addFinding({
+        message: `Substitution ${substitution.id}: substitutionFor muss auf eine vorhandene Entity zeigen.`,
+        path: `substitutions[${subIdx}].from`,
+        nodeId: substitutionNodeId,
+        edgeId: `edge:${substitution.id}-for`
+      });
+    }
+    if (!substitution.to || !entityIds.has(substitution.to)) {
+      addFinding({
+        message: `Substitution ${substitution.id}: substitutionBy muss auf eine vorhandene Entity zeigen.`,
+        path: `substitutions[${subIdx}].to`,
+        nodeId: substitutionNodeId,
+        edgeId: `edge:${substitution.id}-by`
+      });
+    }
+    if (substitution.from && substitution.to && substitution.from === substitution.to) {
+      addFinding({
+        message: `Substitution ${substitution.id}: substitutionFor und substitutionBy müssen unterschiedliche Entities sein.`,
+        path: `substitutions[${subIdx}]`,
+        nodeId: substitutionNodeId
+      });
+    }
+    if (substitution.coverage !== undefined && (typeof substitution.coverage !== "number" || substitution.coverage < 0 || substitution.coverage > 1)) {
+      addFinding({
+        message: `Substitution ${substitution.id}: coverage muss im Bereich [0, 1] liegen.`,
+        path: `substitutions[${subIdx}].coverage`,
+        nodeId: substitutionNodeId
+      });
+    }
+    if (substitution.ramp_up && !DURATION_PATTERN.test(String(substitution.ramp_up))) {
+      addFinding({
+        message: `Substitution ${substitution.id}: ramp_up muss dem Format 14d/2w/6m entsprechen.`,
+        path: `substitutions[${subIdx}].ramp_up`,
+        nodeId: substitutionNodeId
+      });
+    }
+    if (substitution.duration_max && !DURATION_PATTERN.test(String(substitution.duration_max))) {
+      addFinding({
+        message: `Substitution ${substitution.id}: duration_max muss dem Format 14d/2w/6m entsprechen.`,
+        path: `substitutions[${subIdx}].duration_max`,
+        nodeId: substitutionNodeId
+      });
+    }
+
+    const activation = substitution.activation || {};
+    if (activation.threshold?.price_increase !== undefined) {
+      const value = activation.threshold.price_increase;
+      if (typeof value !== "number" || value < 0 || value > 1) {
+        addFinding({
+          message: `Substitution ${substitution.id}: activation.threshold.price_increase muss im Bereich [0, 1] liegen.`,
+          path: `substitutions[${subIdx}].activation.threshold.price_increase`,
+          nodeId: substitutionNodeId
+        });
+      }
+    }
+    if (activation.threshold?.supply_drop !== undefined) {
+      const value = activation.threshold.supply_drop;
+      if (typeof value !== "number" || value < 0 || value > 1) {
+        addFinding({
+          message: `Substitution ${substitution.id}: activation.threshold.supply_drop muss im Bereich [0, 1] liegen.`,
+          path: `substitutions[${subIdx}].activation.threshold.supply_drop`,
+          nodeId: substitutionNodeId
+        });
+      }
+    }
+    if (activation.threshold?.duration_min && !DURATION_PATTERN.test(String(activation.threshold.duration_min))) {
+      addFinding({
+        message: `Substitution ${substitution.id}: activation.threshold.duration_min muss dem Format 14d/2w/6m entsprechen.`,
+        path: `substitutions[${subIdx}].activation.threshold.duration_min`,
+        nodeId: substitutionNodeId
+      });
+    }
+
+    const activationEvents = extractEventIdsFromTrigger(activation.trigger);
+    activationEvents.forEach((eventId, activationIdx) => {
+      if (!eventIds.has(eventId)) {
+        addFinding({
+          message: `Substitution ${substitution.id}: activation.trigger verweist auf unbekanntes Event ${eventId}.`,
+          path: `substitutions[${subIdx}].activation.trigger`,
+          nodeId: substitutionNodeId,
+          edgeId: `edge:${substitution.id}-activation-${activationIdx}`
+        });
+      }
+    });
+
+    (substitution.dependency_overlap || []).forEach((entityId, overlapIdx) => {
+      if (!entityIds.has(entityId)) {
+        addFinding({
+          message: `Substitution ${substitution.id}: dependency_overlap[${overlapIdx}] verweist auf unbekannte Entity.`,
+          path: `substitutions[${subIdx}].dependency_overlap[${overlapIdx}]`,
+          nodeId: substitutionNodeId,
+          edgeId: `edge:${substitution.id}-overlap-${overlapIdx}`
+        });
+      }
+    });
+
+    (substitution.side_effects || []).forEach((effect, effectIdx) => {
+      if (effect.target && !entityIds.has(effect.target)) {
+        addFinding({
+          message: `Substitution ${substitution.id}: side_effect target muss auf eine vorhandene Entity zeigen.`,
+          path: `substitutions[${subIdx}].side_effects[${effectIdx}].target`,
+          nodeId: substitutionNodeId,
+          edgeId: `edge:${substitution.id}-side-effect-${effectIdx}`
+        });
+      }
+    });
+  });
+
+  (pdl.cascades || []).forEach((cascade, cascadeIdx) => {
+    const cascadeNodeId = `cascade:${cascade.id}`;
+    if (!cascade.origin || !eventIds.has(cascade.origin)) {
+      addFinding({
+        message: `Cascade ${cascade.id}: originEvent muss auf ein vorhandenes Event zeigen.`,
+        path: `cascades[${cascadeIdx}].origin`,
+        nodeId: cascadeNodeId,
+        edgeId: `edge:${cascade.id}-origin`
+      });
+    }
+    if (cascade.probability !== undefined && (typeof cascade.probability !== "number" || cascade.probability < 0 || cascade.probability > 1)) {
+      addFinding({
+        message: `Cascade ${cascade.id}: probability muss im Bereich [0, 1] liegen.`,
+        path: `cascades[${cascadeIdx}].probability`,
+        nodeId: cascadeNodeId
+      });
+    }
+    if (cascade.validation?.confidence !== undefined) {
+      const confidence = cascade.validation.confidence;
+      if (typeof confidence !== "number" || confidence < 0 || confidence > 1) {
+        addFinding({
+          message: `Cascade ${cascade.id}: validation.confidence muss im Bereich [0, 1] liegen.`,
+          path: `cascades[${cascadeIdx}].validation.confidence`,
+          nodeId: cascadeNodeId
+        });
+      }
+    }
+
+    (cascade.timeline || []).forEach((entry, entryIdx) => {
+      const timelineNodeId = `timeline:${cascade.id}-${entryIdx}`;
+      if (!entry.at || !DURATION_PATTERN.test(String(entry.at))) {
+        addFinding({
+          message: `Cascade ${cascade.id}: timeline[${entryIdx}] benötigt ein at im Format 14d/2w/6m.`,
+          path: `cascades[${cascadeIdx}].timeline[${entryIdx}].at`,
+          nodeId: timelineNodeId,
+          edgeId: `edge:${cascade.id}-seq-${entryIdx}`
+        });
+      }
+      if (!entry.event || !eventIds.has(entry.event)) {
+        addFinding({
+          message: `Cascade ${cascade.id}: timeline[${entryIdx}].event muss auf ein vorhandenes Event zeigen.`,
+          path: `cascades[${cascadeIdx}].timeline[${entryIdx}].event`,
+          nodeId: timelineNodeId,
+          edgeId: `edge:${cascade.id}-seq-${entryIdx}`
+        });
+      }
+      if (entry.impact?.severity !== undefined && !SEVERITY_VALUES.has(entry.impact.severity)) {
+        addFinding({
+          message: `Cascade ${cascade.id}: timeline[${entryIdx}].impact.severity muss critical/high/medium/low sein.`,
+          path: `cascades[${cascadeIdx}].timeline[${entryIdx}].impact.severity`,
+          nodeId: timelineNodeId
+        });
+      }
+      (entry.affects || []).forEach((entityId) => {
+        if (!entityIds.has(entityId)) {
+          addFinding({
+            message: `Cascade ${cascade.id}: timeline[${entryIdx}].affects verweist auf unbekannte Entity ${entityId}.`,
+            path: `cascades[${cascadeIdx}].timeline[${entryIdx}].affects`,
+            nodeId: timelineNodeId,
+            edgeId: `edge:${cascade.id}-${entryIdx}-affects-${entityId}`
+          });
+        }
+      });
+    });
+  });
+
+  return findings;
+}
+
 async function validatePdl(pdl) {
   const errors = [];
   const warnings = [];
+  const items = [];
+  const shaclFindings = [];
+  const errorNodeIds = new Set();
+  const errorEdgeIds = new Set();
   const warningNodeIds = new Set();
   const warningEdgeIds = new Set();
   const validator = await ensureValidator();
@@ -1486,21 +2031,94 @@ async function validatePdl(pdl) {
     if (!valid && validator.errors) {
       validator.errors.forEach((error) => {
         const path = error.instancePath || "/";
-        errors.push(`Schema ${path}: ${error.message || "ungültig"}`);
+        const message = `Schema ${path}: ${error.message || "ungültig"}`;
+        errors.push(message);
+        items.push(makeValidationItem({
+          source: "schema",
+          level: "error",
+          message,
+          path
+        }));
       });
     }
   } else {
-    warnings.push("Schema-Validierung nicht verfügbar.");
+    const message = "Schema-Validierung nicht verfügbar.";
+    warnings.push(message);
+    items.push(makeValidationItem({
+      source: "schema",
+      level: "warn",
+      message
+    }));
   }
 
   const refIssues = checkReferences(pdl);
   refIssues.forEach((issue) => {
     warnings.push(issue.message);
+    items.push(makeValidationItem({
+      source: "semantic",
+      level: "warn",
+      message: issue.message,
+      path: issue.path,
+      nodeId: issue.nodeId,
+      edgeId: issue.edgeId
+    }));
     if (issue.nodeId) warningNodeIds.add(issue.nodeId);
     if (issue.edgeId) warningEdgeIds.add(issue.edgeId);
   });
 
-  return { errors, warnings, warningNodeIds, warningEdgeIds };
+  checkShaclConstraints(pdl).forEach((finding) => {
+    shaclFindings.push(finding);
+    items.push(finding);
+    if (finding.level === "error") {
+      errors.push(`[SHACL] ${finding.message}`);
+      if (finding.nodeId) errorNodeIds.add(finding.nodeId);
+      if (finding.edgeId) errorEdgeIds.add(finding.edgeId);
+      return;
+    }
+    warnings.push(`[SHACL] ${finding.message}`);
+    if (finding.nodeId) warningNodeIds.add(finding.nodeId);
+    if (finding.edgeId) warningEdgeIds.add(finding.edgeId);
+  });
+
+  return {
+    errors,
+    warnings,
+    items,
+    shaclFindings,
+    errorNodeIds,
+    errorEdgeIds,
+    warningNodeIds,
+    warningEdgeIds
+  };
+}
+
+function applyValidationResult(validation) {
+  state.validation.errors = validation.errors || [];
+  state.validation.warnings = validation.warnings || [];
+  state.validation.items = validation.items || [];
+  state.validation.shaclFindings = validation.shaclFindings || [];
+  state.validation.errorNodeIds = validation.errorNodeIds || new Set();
+  state.validation.errorEdgeIds = validation.errorEdgeIds || new Set();
+  state.validation.warningNodeIds = validation.warningNodeIds || new Set();
+  state.validation.warningEdgeIds = validation.warningEdgeIds || new Set();
+  renderValidation();
+}
+
+async function revalidateCurrentData() {
+  if (!state.raw) {
+    setValidationStatus("Keine Daten geladen.");
+    return;
+  }
+  setValidationStatus("Validierung läuft...");
+  try {
+    const validation = await validatePdl(state.raw);
+    applyValidationResult(validation);
+    if (state.graph) {
+      applyFilters();
+    }
+  } catch (error) {
+    setValidationStatus(`Validierung fehlgeschlagen: ${error.message}`, true);
+  }
 }
 
 function updateUrlState() {
@@ -2700,9 +3318,14 @@ function renderNodeDetails(node) {
       : node.type === "cascade"
         ? buildCascadeExplanation(node)
         : null;
-  const warningChip = state.validation.warningNodeIds.has(node.id)
-    ? "<div class=\"detail-chip warn\">Referenzwarnung</div>"
-    : "";
+  const detailChips = [
+    state.validation.errorNodeIds.has(node.id)
+      ? "<div class=\"detail-chip error\">Validierungsfehler</div>"
+      : "",
+    state.validation.warningNodeIds.has(node.id)
+      ? "<div class=\"detail-chip warn\">Validierungswarnung</div>"
+      : ""
+  ].filter(Boolean).join("");
 
   const impactRows = [];
   if (impactRaw) {
@@ -2718,7 +3341,7 @@ function renderNodeDetails(node) {
   }
 
   const sections = [
-    warningChip,
+    detailChips,
     renderExplanation(explanation),
     renderSection("Basisdaten", rows),
     renderSection("Trigger", trigger ? [
@@ -2759,11 +3382,16 @@ function renderEdgeDetails(edge) {
     ["Zu", getNodeLabelById(edge.to)]
   ];
   const dataRows = edge.data ? Object.entries(edge.data) : [];
-  const warningChip = state.validation.warningEdgeIds.has(edge.id)
-    ? "<div class=\"detail-chip warn\">Referenzwarnung</div>"
-    : "";
+  const detailChips = [
+    state.validation.errorEdgeIds.has(edge.id)
+      ? "<div class=\"detail-chip error\">Validierungsfehler</div>"
+      : "",
+    state.validation.warningEdgeIds.has(edge.id)
+      ? "<div class=\"detail-chip warn\">Validierungswarnung</div>"
+      : ""
+  ].filter(Boolean).join("");
   const content = [
-    warningChip,
+    detailChips,
     renderSection("Verbindung", rows),
     renderSection("Metadaten", dataRows)
   ].filter(Boolean).join("");
@@ -3008,12 +3636,9 @@ async function loadYamlText(name, text) {
     const pdl = parseYaml(text);
     const graph = convertToGraphJson(pdl);
     const validation = await validatePdl(pdl);
-    state.validation.errors = validation.errors;
-    state.validation.warnings = validation.warnings;
-    state.validation.warningNodeIds = validation.warningNodeIds;
-    state.validation.warningEdgeIds = validation.warningEdgeIds;
-    renderValidation();
     buildNetwork(graph);
+    applyValidationResult(validation);
+    applyFilters();
     setStatus(`Geladen: ${name}`);
     state.raw = pdl;
     state.rawText = text;
@@ -3035,6 +3660,10 @@ async function loadYamlText(name, text) {
     renderYamlTree(null);
     state.validation.errors = [];
     state.validation.warnings = [];
+    state.validation.items = [];
+    state.validation.shaclFindings = [];
+    state.validation.errorNodeIds = new Set();
+    state.validation.errorEdgeIds = new Set();
     state.validation.warningNodeIds = new Set();
     state.validation.warningEdgeIds = new Set();
     setValidationStatus("Validierung: fehlgeschlagen", true);
@@ -3055,19 +3684,60 @@ function handleFileUpload(file) {
   reader.readAsText(file);
 }
 
-async function loadExample() {
-  const candidates = [
-    new URL("./examples/s1-soja.pdl.yaml", window.location.href).toString(),
-    new URL("../scenarios/s1-soja.pdl.yaml", window.location.href).toString(),
-    new URL("./scenarios/s1-soja.pdl.yaml", window.location.href).toString()
+function normalizePresetScenarioFile(fileName) {
+  return PRESET_SCENARIO_FILES.includes(fileName) ? fileName : PRESET_SCENARIO_FILES[0];
+}
+
+function populatePresetScenarioSelect(selectElement) {
+  if (!selectElement) return;
+  const currentValue = normalizePresetScenarioFile(selectElement.value);
+  selectElement.innerHTML = "";
+  PRESET_SCENARIO_FILES.forEach((fileName) => {
+    const option = document.createElement("option");
+    option.value = fileName;
+    option.textContent = fileName;
+    selectElement.appendChild(option);
+  });
+  selectElement.value = currentValue;
+}
+
+function setPresetScenarioSelection(fileName) {
+  const normalized = normalizePresetScenarioFile(fileName);
+  if (elements.exampleScenarioSelect) {
+    elements.exampleScenarioSelect.value = normalized;
+  }
+  return normalized;
+}
+
+function initializePresetScenarioSelect() {
+  populatePresetScenarioSelect(elements.exampleScenarioSelect);
+  setPresetScenarioSelection(PRESET_SCENARIO_FILES[0]);
+}
+
+function getSelectedPresetScenarioFile() {
+  if (elements.exampleScenarioSelect) {
+    return normalizePresetScenarioFile(elements.exampleScenarioSelect.value);
+  }
+  return PRESET_SCENARIO_FILES[0];
+}
+
+function buildScenarioCandidates(fileName) {
+  return [
+    new URL(`./examples/${fileName}`, window.location.href).toString(),
+    new URL(`../scenarios/${fileName}`, window.location.href).toString(),
+    new URL(`./scenarios/${fileName}`, window.location.href).toString()
   ];
+}
+
+async function loadExample(fileName = getSelectedPresetScenarioFile()) {
+  const candidates = buildScenarioCandidates(fileName);
   try {
     let lastError = null;
     for (const url of candidates) {
       const response = await fetch(url);
       if (response.ok) {
         const text = await response.text();
-        await loadYamlText("s1-soja.pdl.yaml", text);
+        await loadYamlText(fileName, text);
         return;
       }
       lastError = new Error(`HTTP ${response.status}`);
@@ -3075,7 +3745,7 @@ async function loadExample() {
     throw lastError || new Error("Unbekannter Fehler");
   } catch (error) {
     setStatus(
-      "Beispieldatei konnte nicht geladen werden. Starte den Webserver im Repo-Root (z. B. `python3 -m http.server 8000`) oder lade die Datei über den Upload.",
+      `Szenario "${fileName}" konnte nicht geladen werden. Starte den Webserver im Repo-Root (z. B. \`python3 -m http.server 8000\`) oder lade die Datei über den Upload.`,
       true
     );
   }
@@ -3083,6 +3753,7 @@ async function loadExample() {
 
 function wireUI() {
   state.uiState.pending = readUrlState();
+  initializePresetScenarioSelect();
   setGraphScenarioTitle(null);
   elements.supplyDim.checked = state.supplyDim;
   updateFileLabel();
@@ -3103,7 +3774,14 @@ function wireUI() {
   elements.fileInput.addEventListener("change", (event) => {
     handleFileUpload(event.target.files[0]);
   });
-  elements.exampleBtn.addEventListener("click", loadExample);
+  if (elements.exampleScenarioSelect) {
+    elements.exampleScenarioSelect.addEventListener("change", (event) => {
+      setPresetScenarioSelection(event.target.value);
+    });
+  }
+  elements.exampleBtn.addEventListener("click", () => {
+    loadExample(getSelectedPresetScenarioFile());
+  });
   if (elements.searchInput) elements.searchInput.addEventListener("input", applyFilters);
   elements.conflictMode.addEventListener("change", (event) => {
     setConflictMode(event.target.checked);
@@ -3123,6 +3801,9 @@ function wireUI() {
   }
   if (elements.exportPng) {
     elements.exportPng.addEventListener("click", exportPng);
+  }
+  if (elements.validationRun) {
+    elements.validationRun.addEventListener("click", revalidateCurrentData);
   }
 
   elements.detailsToggle.addEventListener("click", () => {
@@ -3448,7 +4129,7 @@ function initSplashScreen() {
 
   document.body.classList.add("splash-open");
 
-  const finishSplash = ({ loadExampleScenario = true } = {}) => {
+  const finishSplash = () => {
     if (closed) return;
     closed = true;
 
@@ -3465,9 +4146,6 @@ function initSplashScreen() {
       elements.splashScreen.setAttribute("aria-hidden", "true");
       document.body.classList.remove("splash-open");
 
-      if (loadExampleScenario) {
-        loadExample();
-      }
       if (shouldOpenTutorial) {
         openTutorial();
       }
@@ -3481,8 +4159,7 @@ function initSplashScreen() {
   };
 
   document.addEventListener("keydown", onSplashKeydown);
-  elements.splashStartBtn?.addEventListener("click", () => finishSplash());
-  elements.splashExampleBtn?.addEventListener("click", () => finishSplash({ loadExampleScenario: true }));
+  elements.splashStartBtn?.addEventListener("click", finishSplash);
 
   autoTimer = window.setTimeout(() => {
     finishSplash();

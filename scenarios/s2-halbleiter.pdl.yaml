@@ -216,8 +216,11 @@ supply_chains:
       - [silicon_wafer_supply, tsmc_taiwan]
       - [neon_gas_supply, tsmc_taiwan]
       - [silicon_wafer_supply, samsung_foundry]
+      - [silicon_wafer_supply, globalfoundries]
       - [tsmc_taiwan, osat_packaging]
       - [samsung_foundry, osat_packaging]
+      - [globalfoundries, osat_packaging]
+      - [tsmc_taiwan, taiwan_logistics]
       - [osat_packaging, bosch_semiconductor]
       - [osat_packaging, infineon_dresden]
       - [bosch_semiconductor, vw_production]
@@ -235,8 +238,16 @@ supply_chains:
         criticality: high
       - from: tsmc_taiwan
         to: asml_netherlands
-        type: equipment
+        type: input
         criticality: high
+      - from: tsmc_taiwan
+        to: taiwan_logistics
+        type: logistics
+        criticality: high
+      - from: asml_netherlands
+        to: rare_earth_supply
+        type: input
+        criticality: medium
       - from: osat_packaging
         to: tsmc_taiwan
         type: input
@@ -258,11 +269,11 @@ supply_chains:
     dependencies:
       - from: zulieferer_cluster
         to: vw_production
-        type: orders
+        type: demand
         criticality: high
       - from: zulieferer_cluster
         to: bmw_production
-        type: orders
+        type: demand
         criticality: high
 
   # Medizintechnik-Kette

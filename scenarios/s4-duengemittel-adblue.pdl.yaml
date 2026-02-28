@@ -369,11 +369,11 @@ supply_chains:
     dependencies:
       - from: cold_chain_logistics
         to: heavy_trucks
-        type: transport
+        type: logistics
         criticality: high
       - from: hospital_logistics
         to: heavy_trucks
-        type: transport
+        type: logistics
         criticality: high
       - from: livestock_farms
         to: animal_feed_supply
@@ -390,12 +390,12 @@ supply_chains:
     dependencies:
       - from: adblue_supply
         to: heavy_trucks
-        type: transport
+        type: logistics
         criticality: high
         note: "AdBlue-Distribution benötigt selbst LKW-Transport"
       - from: natural_gas_supply
         to: heavy_trucks
-        type: transport
+        type: logistics
         criticality: medium
         note: "Gas-Distribution teilweise per LKW (LNG, Flüssiggas)"
 

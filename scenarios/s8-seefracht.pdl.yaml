@@ -246,7 +246,7 @@ supply_chains:
         criticality: high
       - from: global_container_fleet
         to: marine_insurance
-        type: financial
+        type: input
         criticality: medium
 
   # Sektorale Verteilung Deutschland
@@ -279,7 +279,7 @@ supply_chains:
         note: "Umleitung erhöht Treibstoffverbrauch um 30-40%"
       - from: marine_insurance
         to: cape_good_hope_route
-        type: financial
+        type: input
         criticality: medium
         note: "War Risk Prämie macht Suez-Route unwirtschaftlich"
 

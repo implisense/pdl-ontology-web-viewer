@@ -326,6 +326,8 @@ supply_chains:
       - [network_carriers, payment_systems]
       - [network_carriers, hospital_it]
       - [network_carriers, logistics_control]
+      - [network_carriers, email_services]
+      - [network_carriers, rail_systems]
       - [network_carriers, voip_systems]
       - [ozg_services, meldewesen]
       - [ozg_services, sozialleistungen]
@@ -338,6 +340,8 @@ supply_chains:
       - [cloud_hyperscaler, payment_systems]
       - [cloud_hyperscaler, ecommerce]
       - [mobile_basestation_batteries, mobile_backend]
+      - [logistics_control, parcel_tracking]
+      - [payment_systems, stock_exchange]
       - [cdn_edge_cache, ozg_services]
       - [cdn_edge_cache, ecommerce]
     dependencies:
@@ -347,6 +351,22 @@ supply_chains:
         criticality: high
       - from: emergency_dispatch
         to: voip_systems
+        type: data
+        criticality: high
+      - from: email_services
+        to: network_carriers
+        type: data
+        criticality: medium
+      - from: rail_systems
+        to: network_carriers
+        type: data
+        criticality: high
+      - from: parcel_tracking
+        to: logistics_control
+        type: data
+        criticality: medium
+      - from: stock_exchange
+        to: payment_systems
         type: data
         criticality: high
       - from: cloud_hyperscaler
@@ -384,11 +404,11 @@ supply_chains:
     dependencies:
       - from: diesel_supply
         to: payment_systems
-        type: financial
+        type: energy
         criticality: high
       - from: diesel_generators
         to: voip_systems
-        type: coordination
+        type: energy
         criticality: high
 
 # =============================================================================
